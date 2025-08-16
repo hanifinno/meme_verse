@@ -21,8 +21,9 @@ class SplashView extends GetView<SplashController> {
             children: [
               Positioned(
                 top: Get.height / 5,
-                child: const Image(
-                  height: 192,
+                child: Image(
+                  fit: BoxFit.contain,
+                  height: MediaQuery.of(context).size.height / 10,
                   image: AssetImage(AppAssets.APP_TRANSPARENT_LOGO),
                 ),
               ),

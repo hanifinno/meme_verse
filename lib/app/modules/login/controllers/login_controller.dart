@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:meme_verse/app/core/config/app_constant.dart';
+import 'package:meme_verse/app/core/models/user_model.dart';
+import 'package:meme_verse/app/data/login_credentials.dart';
 import 'package:meme_verse/app/routes/app_pages.dart';
 
 class LoginController extends GetxController {
@@ -10,6 +12,7 @@ class LoginController extends GetxController {
   late Rx<User?> firebaseUser;
   final FirebaseAuth auth = FirebaseAuth.instance;
   final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+  final LoginCredential _loginCredential = LoginCredential();
 
   // Replace with your Web client ID from Firebase (Android needs serverClientId)
   final String? serverClientId = AppConstant.SERVER_CLIENT_ID;
@@ -78,11 +81,34 @@ class LoginController extends GetxController {
       // accessToken: googleAuth.accessToken,
     );
 
-    await auth.signInWithCredential(credential);
+    UserCredential userCredential = await FirebaseAuth.instance
+        .signInWithCredential(credential);
+    User? firebaseUser = userCredential.user;
+    if (firebaseUser != null) {
+      UserModel model = UserModel(
+        id: firebaseUser.uid,
+        name: firebaseUser.displayName,
+        email: firebaseUser.email,
+        photoUrl: firebaseUser.photoURL,
+        phone: firebaseUser.phoneNumber,
+        isAnonymous: firebaseUser.isAnonymous,
+      );
+      // Save to GetStorage
+      _loginCredential.saveUserData(model);
+
+      // Save auth state
+      _loginCredential.changeUserAuthState(true);
+      // Optional: Save Firebase ID token if needed
+      String? token = await firebaseUser.getIdToken();
+      _loginCredential.saveToken(token ?? '');
+    }
   }
 
   Future<void> signOut() async {
     await auth.signOut();
     await googleSignIn.signOut();
+
+    // Clear local storage
+    _loginCredential.clearLoginCredential();
   }
 }

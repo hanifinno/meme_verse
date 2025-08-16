@@ -3,6 +3,7 @@ import 'dart:convert';
 class UserModel {
   String? id;
   String? email;
+  String? name;
   String? userId;
   String? userPassword;
   String? userType;
@@ -11,6 +12,7 @@ class UserModel {
   String? address;
 
   bool? logStatus;
+  bool? isAnonymous;
 
   String? phone;
 
@@ -23,8 +25,9 @@ class UserModel {
     this.userPassword,
     this.userType,
     this.isActive,
-
+    this.name,
     this.address,
+    this.isAnonymous,
 
     this.logStatus,
     this.phone,
@@ -36,10 +39,12 @@ class UserModel {
     return {
       'id': id,
       'email': email,
+      'isAnonymous': isAnonymous,
       'userId': userId,
       'userPassword': userPassword,
       'userType': userType,
       'isActive': isActive,
+      'name': name,
 
       'address': address,
       'logStatus': logStatus,
@@ -52,6 +57,8 @@ class UserModel {
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
       id: map['id'],
+      name: map['name'],
+      isAnonymous: map['isAnonymous'],
       email: map['email'],
       userId: map['userId'],
       userPassword: map['userPassword'],
@@ -74,7 +81,7 @@ class UserModel {
 
   @override
   String toString() {
-    return 'UserModel( id: $id, email: $email, userId: $userId, userPassword: $userPassword, userType: $userType, isActive: $isActive,  address: $address,  logStatus: $logStatus, phone: $phone,    photoUrl: $photoUrl)';
+    return 'UserModel( id: $id, name:$name, isAnonymous:$isAnonymous, email: $email, userId: $userId, userPassword: $userPassword, userType: $userType, isActive: $isActive,  address: $address,  logStatus: $logStatus, phone: $phone,    photoUrl: $photoUrl)';
   }
 
   @override
@@ -83,6 +90,8 @@ class UserModel {
 
     return other is UserModel &&
         other.id == id &&
+        other.name == name &&
+        other.isAnonymous == isAnonymous &&
         other.email == email &&
         other.userId == userId &&
         other.userPassword == userPassword &&
