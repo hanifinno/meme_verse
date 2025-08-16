@@ -1,0 +1,55 @@
+name: meme_verse
+description: "A Meme Sharing Community App"
+
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+
+  cupertino_icons: ^1.0.8
+  flutter_easyloading: ^3.0.5
+  get: ^4.7.2
+  ansicolor: ^2.0.3
+  get_storage: ^2.1.1
+  google_fonts: ^6.3.0
+  flutter_svg: ^2.2.0
+  dio: ^5.9.0
+  firebase_core: ^4.0.0
+  firebase_auth: ^6.0.1
+  google_sign_in: ^7.1.0
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+
+flutter:
+
+
+  uses-material-design: true
+
+
+  assets:
+    - assets/logo/
+    - assets/icons/
+    - assets/icons/home/
+    - assets/icons/ssp/
+    - assets/icons/requisition/
+    - assets/icons/document/
+    - assets/icons/app/
+    - assets/icons/hris/
+    - assets/images/
+    - assets/loader/
+    - example/theme/
