@@ -14,7 +14,6 @@ class LoginController extends GetxController {
   final GoogleSignIn googleSignIn = GoogleSignIn.instance;
   final LoginCredential _loginCredential = LoginCredential();
 
-  // Replace with your Web client ID from Firebase (Android needs serverClientId)
   final String? serverClientId = AppConstant.SERVER_CLIENT_ID;
 
   @override
@@ -98,7 +97,6 @@ class LoginController extends GetxController {
 
       // Save auth state
       _loginCredential.changeUserAuthState(true);
-      // Optional: Save Firebase ID token if needed
       String? token = await firebaseUser.getIdToken();
       _loginCredential.saveToken(token ?? '');
     }
