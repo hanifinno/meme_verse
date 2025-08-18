@@ -11,7 +11,7 @@ class HomeView extends GetView<HomeController> {
 
   final List<Widget> _pages = [
     FeedPage(),
-    UploadPage(),
+    UploadMemePage(),
     NotificationsPage(),
     ProfilePage(),
   ];
