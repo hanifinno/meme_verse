@@ -10,7 +10,7 @@ class LoginView extends GetView<LoginController> {
   Widget build(BuildContext context) {
     // Form key for validation
     final _formKey = GlobalKey<FormState>();
-    
+
     // Controllers for email and password fields
     final TextEditingController emailController = TextEditingController();
     final TextEditingController passwordController = TextEditingController();
@@ -24,7 +24,11 @@ class LoginView extends GetView<LoginController> {
             mainAxisSize: MainAxisSize.min,
             children: [
               // App Logo
-              Image.asset(AppAssets.APP_LOGO, width: 120, height: 120),
+              Image.asset(
+                AppAssets.APP_TRANSPARENT_LOGO,
+                width: 120,
+                height: 120,
+              ),
               const SizedBox(height: 20),
 
               // App Name
@@ -146,10 +150,7 @@ class LoginView extends GetView<LoginController> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                icon: Image.asset(
-                  AppAssets.GOOGLE_ICON,
-                  height: 24,
-                ),
+                icon: Image.asset(AppAssets.GOOGLE_ICON, height: 24),
                 label: const Text(
                   'Sign in with Google',
                   style: TextStyle(fontSize: 16),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:meme_verse/app/modules/home/views/nav_menu/feed_page.dart';
+import 'package:meme_verse/app/modules/home/views/nav_menu/logout_page.dart';
 import 'package:meme_verse/app/modules/home/views/nav_menu/notification_page.dart';
 import 'package:meme_verse/app/modules/home/views/nav_menu/profile_page.dart';
 import 'package:meme_verse/app/modules/home/views/nav_menu/upload_page.dart';
@@ -14,6 +15,7 @@ class HomeView extends GetView<HomeController> {
     UploadMemePage(),
     NotificationsPage(),
     ProfilePage(),
+    LogoutPage(),
   ];
 
   @override
@@ -33,6 +35,7 @@ class HomeView extends GetView<HomeController> {
               label: 'Notifications',
             ),
             BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+            BottomNavigationBarItem(icon: Icon(Icons.logout), label: 'Logout'),
           ],
         ),
       ),
