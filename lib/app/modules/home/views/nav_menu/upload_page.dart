@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:meme_verse/app/modules/home/controllers/home_controller.dart';
 
 class UploadMemePage extends GetView<HomeController> {
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -33,9 +32,8 @@ class UploadMemePage extends GetView<HomeController> {
             Row(
               children: [
                 ElevatedButton(
-                  onPressed: ()async{
-                 await   controller.pickImage();
-                 
+                  onPressed: () async {
+                    await controller.pickImage();
                   },
                   child: const Text("Pick Image"),
                 ),
@@ -44,7 +42,9 @@ class UploadMemePage extends GetView<HomeController> {
                   return controller.isLoading.value
                       ? const CircularProgressIndicator()
                       : ElevatedButton(
-                          onPressed: controller.uploadMeme,
+                          onPressed: () {
+                            controller.uploadMeme();
+                          },
                           child: const Text("Upload"),
                         );
                 }),
