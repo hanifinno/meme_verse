@@ -6,15 +6,15 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:meme_verse/app/core/models/meme_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:meme_verse/app/routes/app_pages.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomeController extends GetxController {
   var currentIndex = 0.obs;
   var feedList = <MemeModel>[].obs;
-
+  final firestore = FirebaseFirestore.instance;
   void changeTab(int index) {
     currentIndex.value = index;
   }
@@ -55,41 +55,48 @@ class HomeController extends GetxController {
     }
   }
 
-final titleController = TextEditingController();
-var pickedFile = Rx<File?>(null);
-var isLoading = false.obs;
+  final titleController = TextEditingController();
+  var pickedFile = Rx<File?>(null);
+  var isLoading = false.obs;
 
-final ImagePicker _picker = ImagePicker();
+  final ImagePicker _picker = ImagePicker();
 
-Future<void> pickImage() async {
-  try {
-    // Check and request gallery permission
-    final permissionStatus = await Permission.photos.request();
-    if (!permissionStatus.isGranted) {
-      print('Gallery permission denied');
-      return;
+  Future<void> pickImage() async {
+    try {
+      // Check and request gallery permission
+      final permissionStatus = await Permission.photos.request();
+      if (!permissionStatus.isGranted) {
+        print('Gallery permission denied');
+        return;
+      }
+
+      // Pick image from gallery
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800, // Limit size
+        maxHeight: 800,
+        imageQuality: 85, // Compress for JPGs
+      );
+
+      if (picked != null) {
+        pickedFile.value = File(picked.path);
+      } else {
+        print('No image selected');
+      }
+    } catch (e) {
+      print('Error picking image: $e');
     }
-
-    // Pick image from gallery
-    final picked = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 800, // Limit size
-      maxHeight: 800,
-      imageQuality: 85, // Compress for JPGs
-    );
-
-    if (picked != null) {
-      pickedFile.value = File(picked.path);
-    } else {
-      print('No image selected');
-    }
-  } catch (e) {
-    print('Error picking image: $e');
   }
-}
 
   /// Upload meme
-  Future<void> uploadMeme() async {
+  ///
+  final supabase = Supabase.instance.client;
+
+  Future<void> uploadMeme(
+    // TextEditingController titleController,
+    // Rx<File?> pickedFile,
+    // RxBool isLoading,
+  ) async {
     if (pickedFile.value == null || titleController.text.isEmpty) {
       Get.snackbar("Error", "Please select image and add description");
       return;
@@ -98,28 +105,29 @@ Future<void> pickImage() async {
     try {
       isLoading.value = true;
 
-      // Upload image to Firebase Storage
-      String fileName = DateTime.now().millisecondsSinceEpoch.toString();
-      Reference ref = FirebaseStorage.instance.ref().child(
-        "memes/$fileName.jpg",
-      );
-      await ref.putFile(pickedFile.value!);
+      // Generate a safe filename
+      String fileName = "${DateTime.now().millisecondsSinceEpoch}.jpg";
+      debugPrint('File Name ::: $fileName');
 
-      String downloadUrl = await ref.getDownloadURL();
+      // Upload to Supabase Storage
+      final file = pickedFile.value!;
+      await supabase.storage.from("memes").upload(fileName, file);
 
-      // Add into Firestore under "memes" collection
-      await FirebaseFirestore.instance
-          .collection("memes")
-          .doc("defaultMemeId")
-          .update({
-            "memeList": FieldValue.arrayUnion([
-              {
-                "imageUrl": downloadUrl,
-                "title": titleController.text,
-                "likeCount": 0,
-              },
-            ]),
-          });
+      // Get public URL
+      final publicUrl = supabase.storage.from("memes").getPublicUrl(fileName);
+
+      // 3. Save to Firestore using .set()
+      final docRef = firestore.collection("memes").doc('memeId');
+
+      await docRef.set({
+        "memeList": FieldValue.arrayUnion([
+          {
+            "imageUrl": publicUrl,
+            "title": titleController.text,
+            // "createdAt": FieldValue.serverTimestamp(),
+          },
+        ]),
+      }, SetOptions(merge: true)); // merge = update if exists, else create
 
       Get.snackbar("Success", "Meme uploaded!");
       titleController.clear();
