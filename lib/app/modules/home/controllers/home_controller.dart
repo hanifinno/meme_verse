@@ -55,48 +55,38 @@ class HomeController extends GetxController {
     }
   }
 
-  final titleController = TextEditingController();
-  var pickedFile = Rx<File?>(null);
-  var isLoading = false.obs;
+final titleController = TextEditingController();
+var pickedFile = Rx<File?>(null);
+var isLoading = false.obs;
 
-  final ImagePicker _picker = ImagePicker();
+final ImagePicker _picker = ImagePicker();
 
-  Future<void> pickImage() async {
-    try {
-      // Check and request gallery permission
-      final permissionStatus = await Permission.photos.request();
-      if (!permissionStatus.isGranted) {
-        // Handle permission denial (e.g., show a dialog)
-        print('Gallery permission denied');
-        return;
-      }
-
-      // Pick image from gallery
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800, // Limit size to reduce memory usage
-        maxHeight: 800,
-        imageQuality: 85, // Compress image to reduce file size
-      );
-
-      if (picked != null) {
-        // Process file in an isolate to avoid blocking the main thread
-        final file = await compute(_processImage, picked.path);
-        pickedFile.value = file;
-      } else {
-        print('No image selected');
-      }
-    } catch (e) {
-      print('Error picking image: $e');
-      // Optionally show a user-friendly error message
+Future<void> pickImage() async {
+  try {
+    // Check and request gallery permission
+    final permissionStatus = await Permission.photos.request();
+    if (!permissionStatus.isGranted) {
+      print('Gallery permission denied');
+      return;
     }
-  }
 
-  // Process image in a separate isolate
-  File _processImage(String path) {
-    return File(path);
+    // Pick image from gallery
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800, // Limit size
+      maxHeight: 800,
+      imageQuality: 85, // Compress for JPGs
+    );
+
+    if (picked != null) {
+      pickedFile.value = File(picked.path);
+    } else {
+      print('No image selected');
+    }
+  } catch (e) {
+    print('Error picking image: $e');
   }
+}
 
   /// Upload meme
   Future<void> uploadMeme() async {
