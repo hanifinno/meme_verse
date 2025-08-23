@@ -51,35 +51,38 @@ class CustomWidgets {
   }) {
     return Animate(
       effects: [ShakeEffect(duration: Duration(milliseconds: 200), hz: 4)],
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 4,
-        color: AppColors.GRAY_WHITE_COLOR,
-        child: Column(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              child: Image.network(
-                imageUrl,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Icon(Icons.error, color: AppColors.RED_COLOR),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(8),
-              child: Text(
-                caption,
-                style: GoogleFonts.poppins(
-                  color: isTrending ? AppColors.SECONDARY_COLOR : AppColors.WHITE_COLOR,
-                  fontSize: 16,
+      child: InkWell(
+        onTap: onTap,
+        child: Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 4,
+          color: AppColors.GRAY_WHITE_COLOR,
+          child: Column(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                child: Image.network(
+                  imageUrl,
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Icon(Icons.error, color: AppColors.RED_COLOR),
                 ),
               ),
-            ),
-          ],
-        ),
-      ).animate().fadeIn(duration: Duration(milliseconds: 300)).scale(),
+              Padding(
+                padding: EdgeInsets.all(8),
+                child: Text(
+                  caption,
+                  style: GoogleFonts.poppins(
+                    color: isTrending ? AppColors.SECONDARY_COLOR : AppColors.WHITE_COLOR,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ).animate().fadeIn(duration: Duration(milliseconds: 300)).scale(),
+      ),
     );
   }
 
@@ -110,7 +113,7 @@ class CustomWidgets {
 
   static Widget customLottieLoader() {
     return Lottie.asset(
-      'assets/lottie/meme_loader.json', // Meme-themed Lottie (e.g., dancing Pepe)
+      'assets/loader/meme_loader.json', // Meme-themed Lottie (e.g., dancing Pepe)
       width: 100,
       height: 100,
     );

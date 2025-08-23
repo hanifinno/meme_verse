@@ -3,6 +3,8 @@ import 'package:meme_verse/app/modules/home/bindings/home_binding.dart';
 import 'package:meme_verse/app/modules/home/views/home_view.dart';
 import 'package:meme_verse/app/modules/login/bindings/login_binding.dart';
 import 'package:meme_verse/app/modules/login/views/login_view.dart';
+import 'package:meme_verse/app/modules/meme_details/bindings/meme_details_binding.dart';
+import 'package:meme_verse/app/modules/meme_details/views/meme_details_view.dart';
 import 'package:meme_verse/app/modules/splash/bindings/splash_binding.dart';
 import 'package:meme_verse/app/modules/splash/views/splash_view.dart';
 
@@ -95,6 +97,11 @@ class AppPages {
     //   page: () => const NotificationView(),
     //   binding: NotificationsBinding(),
     // ),
+    GetPage(
+      name: _Paths.MEME_DETAILS,
+      page: () =>  MemeDetailsView(),
+      binding: MemeDetailsBinding(),
+    ),
 
     // GetPage(
     //   name: _Paths.PROFILE,

@@ -20,12 +20,13 @@ class MemeVerse extends StatelessWidget {
         getPages: AppPages.routes,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
-        themeMode: //ThemeMode.light, // ThemeService().themeMode.value,
-        themeService.themeType == ThemeType.system
-            ? ThemeMode.system
-            : (themeService.themeType == ThemeType.light
-                  ? ThemeMode.light
-                  : ThemeMode.dark),
+        themeMode: 
+      themeService.themeType == ThemeType.system
+    ? ThemeMode.system
+    : (themeService.themeType == ThemeType.light
+          ? ThemeMode.light
+          : ThemeMode.dark),
+
         builder: EasyLoading.init(),
       ),
     );

@@ -6,8 +6,10 @@ import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:meme_verse/app/core/models/meme_model.dart';
 import 'package:meme_verse/app/core/theme/color/app_colors.dart';
+import 'package:meme_verse/app/core/theme/theme_service/theme_service.dart';
 import 'package:meme_verse/app/core/widgets/custom_widgets.dart';
 import 'package:meme_verse/app/modules/home/controllers/home_controller.dart';
+import 'package:meme_verse/app/routes/app_pages.dart';
 
 class FeedPage extends GetView<HomeController> {
   const FeedPage({super.key});
@@ -48,8 +50,10 @@ class FeedPage extends GetView<HomeController> {
         ),
         floatingActionButton: FloatingActionButton(
           backgroundColor: AppColors.PRIMARY_COLOR,
-          onPressed: () => Get.toNamed('/upload'), // Navigate to UploadMemePage
-          child: const Icon(Icons.add, color: AppColors.BUTTON_TEXT_COLOR),
+          onPressed: () async{
+            ThemeService().toggleTheme();
+          }, // Navigate to UploadMemePage
+          child: const Icon(Icons.switch_access_shortcut, color: AppColors.BUTTON_TEXT_COLOR),
         ).animate().scale(
               begin: const Offset(0.8, 0.8),
               end: const Offset(1.0, 1.0),
@@ -193,7 +197,9 @@ class FeedPage extends GetView<HomeController> {
             imageUrl: meme.imageUrl ?? '',
             caption: meme.title ?? '',
             isTrending: isTrending,
-            onTap: () => Get.toNamed('/meme-detail', arguments: meme.id),
+            onTap: () {
+              Get.toNamed(Routes.MEME_DETAILS, arguments: meme);
+            },
           ).animate().fadeIn().shake(),
         );
       },

@@ -11,7 +11,7 @@ class SplashView extends GetView<SplashController> {
   Widget build(BuildContext context) {
     controller.navigate();
     return Scaffold(
-      backgroundColor: Colors.white,
+      // backgroundColor: Colors.white,
       body: SafeArea(
         child: SizedBox(
           height: double.maxFinite,
