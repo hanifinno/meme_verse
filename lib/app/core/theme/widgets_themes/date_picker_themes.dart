@@ -1,7 +1,6 @@
 import 'package:meme_verse/app/core/theme/color/app_colors.dart';
 
 import '../../constants/app_deimensions.dart';
-import '../color/app_color_scheme.dart';
 import 'package:flutter/material.dart';
 
 class DatePickerThemes {
@@ -16,7 +15,7 @@ class DatePickerThemes {
 
     Color getBackgroundColor(Set<WidgetState> states, Color selectedColor) {
       if (states.contains(WidgetState.selected)) return scheme.primary;
-      return AppColors.COLOR_TRANSPARENT;
+      return AppColors.TRANSPARENT;
     }
 
     return DatePickerThemeData(

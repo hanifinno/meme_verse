@@ -11,7 +11,7 @@ void configLoader() {
   EasyLoading.instance
     ..loadingStyle = EasyLoadingStyle.custom
     ..backgroundColor = Colors.transparent
-    ..indicatorColor = AppColors.COLOR_TRANSPARENT
+    ..indicatorColor = AppColors.TRANSPARENT
     ..textColor = Colors.transparent
     ..boxShadow = []
     ..indicatorWidget = Stack(
