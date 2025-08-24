@@ -20,7 +20,7 @@ void main() async {
   await GetStorage.init();
   configLoader();
   // Initialize ThemeService
-  await Get.putAsync<ThemeService>(() async => await ThemeService().init());
+  ThemeService.instance.loadCachedTheme();
   ansiColorDisabled = false;
   runApp(const MemeVerse());
 }

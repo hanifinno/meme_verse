@@ -11,7 +11,6 @@ class MemeVerse extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeService = Get.find<ThemeService>();
     return Obx(
       () => GetMaterialApp(
         debugShowCheckedModeBanner: false,
@@ -20,12 +19,7 @@ class MemeVerse extends StatelessWidget {
         getPages: AppPages.routes,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
-        themeMode: 
-      themeService.themeType == ThemeType.system
-    ? ThemeMode.system
-    : (themeService.themeType == ThemeType.light
-          ? ThemeMode.light
-          : ThemeMode.dark),
+        themeMode: ThemeService.instance.currentMode.value,
 
         builder: EasyLoading.init(),
       ),

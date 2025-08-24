@@ -31,7 +31,9 @@ class AppTheme {
     brightness: AppColorScheme.lightColorScheme.brightness,
     colorScheme: AppColorScheme.lightColorScheme,
     textTheme: AppTextTheme.lightTextTheme,
-    scaffoldBackgroundColor: AppColorScheme.lightColorScheme.surface,
+    scaffoldBackgroundColor: AppColorScheme
+        .lightColorScheme
+        .onPrimary, //AppColorScheme.lightColorScheme.surface,
     appBarTheme: AppBarTheme(
       backgroundColor: AppColorScheme.lightColorScheme.surface,
       foregroundColor: AppColorScheme.lightColorScheme.onSurface,

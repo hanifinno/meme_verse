@@ -25,11 +25,20 @@ class TimePickerThemes {
     return TimePickerThemeData(
       backgroundColor: scheme.surface,
       hourMinuteTextColor: scheme.onSurface,
-      hourMinuteColor: scheme.surfaceContainerHighest,
+      hourMinuteColor: scheme.surfaceContainer, // darker in dark mode
       dayPeriodTextColor: scheme.onSurface,
-      dayPeriodColor: scheme.surfaceContainerHighest,
+      dayPeriodColor: scheme.surfaceContainer,
       dialHandColor: scheme.primary,
-      dialBackgroundColor: scheme.surfaceContainerHighest,
+
+      dialBackgroundColor: scheme.surfaceContainer,
+      dialTextColor: scheme.onSurface,
+      dialTextStyle: TextStyle(
+        fontFamily: FONT_FAMILY,
+        fontWeight: MEDIUM_WEIGHT,
+        fontSize: BODY_LARGE,
+        color: scheme.surface,
+      ),
+
       entryModeIconColor: scheme.onSurface,
       hourMinuteTextStyle: TextStyle(
         color: scheme.onSurface,
@@ -56,7 +65,7 @@ class TimePickerThemes {
       dayPeriodShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
       ),
-      dayPeriodBorderSide: BorderSide(color: scheme.outline, width: 1),
+      dayPeriodBorderSide: BorderSide(color: scheme.outlineVariant, width: 1),
       inputDecorationTheme: inputDecoration,
     );
   }

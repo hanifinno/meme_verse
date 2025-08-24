@@ -207,12 +207,14 @@ class HomeController extends GetxController {
         final memeList = doc['memeList'] as List<dynamic>? ?? [];
         for (var meme in memeList) {
           if (meme['isTrending'] == false || meme['isTrending'] == null) {
-            memes.add(MemeModel(
-              id: doc.id,
-              imageUrl: meme['imageUrl'] ?? '',
-              title: meme['title'] ?? '',
-              likeCount: meme['likeCount'] ?? 0,
-            ));
+            memes.add(
+              MemeModel(
+                id: doc.id,
+                imageUrl: meme['imageUrl'] ?? '',
+                title: meme['title'] ?? '',
+                likeCount: meme['likeCount'] ?? 0,
+              ),
+            );
           }
         }
       }
@@ -238,12 +240,14 @@ class HomeController extends GetxController {
         final memeList = doc['memeList'] as List<dynamic>? ?? [];
         for (var meme in memeList) {
           if (meme['isTrending'] == true) {
-            memes.add(MemeModel(
-              id: doc.id,
-              imageUrl: meme['imageUrl'] ?? '',
-              title: meme['title'] ?? '',
-              likeCount: meme['likeCount'] ?? 0,
-            ));
+            memes.add(
+              MemeModel(
+                id: doc.id,
+                imageUrl: meme['imageUrl'] ?? '',
+                title: meme['title'] ?? '',
+                likeCount: meme['likeCount'] ?? 0,
+              ),
+            );
           }
         }
       }
@@ -260,40 +264,41 @@ class HomeController extends GetxController {
     }
   }
 
- Future<void> fetchRecommendations() async {
-  try {
-    isLoading.value = true;
+  Future<void> fetchRecommendations() async {
+    try {
+      isLoading.value = true;
 
-    // Replace with your Supabase function URL
-    final supabaseFunctionUrl =
-        'https://cicipihemdigpsthnibk.functions.supabase.co/recommendMemes?userId=$userId';
+      // Replace with your Supabase function URL
+      final supabaseFunctionUrl =
+          'https://cicipihemdigpsthnibk.functions.supabase.co/recommendMemes?userId=$userId';
 
-    final response = await http.get(Uri.parse(supabaseFunctionUrl), headers: {
-    'Authorization': 'Bearer ${AppConstant.SUPABASE_ANON_KEY}',
-  },);
+      final response = await http.get(
+        Uri.parse(supabaseFunctionUrl),
+        headers: {'Authorization': 'Bearer ${AppConstant.SUPABASE_ANON_KEY}'},
+      );
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body) as List<dynamic>;
-      recommendations.assignAll(data.cast<Map<String, dynamic>>());
-    } else {
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List<dynamic>;
+        recommendations.assignAll(data.cast<Map<String, dynamic>>());
+      } else {
+        Get.snackbar(
+          'Error',
+          'Failed to load recommendations: ${response.statusCode}',
+          backgroundColor: AppColors.RED_COLOR,
+          colorText: AppColors.WHITE_COLOR,
+        );
+      }
+    } catch (e) {
       Get.snackbar(
         'Error',
-        'Failed to load recommendations: ${response.statusCode}',
+        'Error fetching recommendations: $e',
         backgroundColor: AppColors.RED_COLOR,
         colorText: AppColors.WHITE_COLOR,
       );
+    } finally {
+      isLoading.value = false;
     }
-  } catch (e) {
-    Get.snackbar(
-      'Error',
-      'Error fetching recommendations: $e',
-      backgroundColor: AppColors.RED_COLOR,
-      colorText: AppColors.WHITE_COLOR,
-    );
-  } finally {
-    isLoading.value = false;
   }
-}
 
   Future<void> pickImage() async {
     try {
@@ -357,7 +362,7 @@ class HomeController extends GetxController {
             'title': titleController.text,
             'likeCount': 0,
             'isTrending': false,
-            'createdAt': FieldValue.serverTimestamp(),
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
           },
         ]),
       }, SetOptions(merge: true));
@@ -381,7 +386,8 @@ class HomeController extends GetxController {
       isLoading.value = false;
     }
   }
- GoogleSignIn googleSignIn = GoogleSignIn.instance;
+
+  GoogleSignIn googleSignIn = GoogleSignIn.instance;
   Future<void> signOut() async {
     try {
       await FirebaseAuth.instance.signOut();
