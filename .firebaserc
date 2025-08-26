@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "memeverse-2bc9f"
-  }
+    "default": "memeverse-2bc9f",
+    "production": "memeverse-2bc9f"
+  },
+  "targets": {},
+  "etags": {}
 }

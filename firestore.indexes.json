@@ -1,0 +1,20 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "memes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "memeList.isTrending",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "memeList.createdAt",
+          "order": "DESCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    }
+  ],
+  "fieldOverrides": []
+}
