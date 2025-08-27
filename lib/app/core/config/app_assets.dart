@@ -47,7 +47,7 @@ class AppAssets {
   static const String PROFILE_DEMO = 'assets/images/profile_demo.png';
   static const String TAHMID_PROFILE_IMAGE =
       'assets/images/tahmid_profile_image.png';
-  static const String APP_USER_PROFILE = 'assets/images/app_user_profile.png';
+  static const String APP_USER_PROFILE = 'assets/images/user_avatar.jpg';
   //loader
   static const String LOADER_CIRCLE = 'assets/loader/loader_circle.gif';
   static const String LOADER_ICON = 'assets/loader/loader_icon.png';

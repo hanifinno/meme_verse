@@ -174,7 +174,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 
-class HomeController extends GetxController {
+class HomeController extends GetxController
+    with GetSingleTickerProviderStateMixin {
   var currentIndex = 0.obs;
   var feedList = <MemeModel>[].obs;
   var trendingList = <MemeModel>[].obs;
@@ -185,6 +186,9 @@ class HomeController extends GetxController {
   final ImagePicker _picker = ImagePicker();
   final titleController = TextEditingController();
   var pickedFile = Rx<File?>(null);
+  var newList = <MemeModel>[].obs;
+  late TabController tabController;
+
   String get userId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   @override
@@ -194,6 +198,13 @@ class HomeController extends GetxController {
     refreshFeed();
     refreshTrending();
     fetchRecommendations();
+    tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void onClose() {
+    tabController.dispose(); // Dispose of the TabController
+    super.onClose();
   }
 
   void changeTab(int index) {

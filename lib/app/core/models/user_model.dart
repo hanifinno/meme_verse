@@ -17,6 +17,9 @@ class UserModel {
   String? phone;
 
   String? photoUrl;
+  int? memeCount;
+  int? followerCount;
+  int? followingCount;
 
   UserModel({
     this.id,
@@ -33,6 +36,9 @@ class UserModel {
     this.phone,
 
     this.photoUrl,
+    this.memeCount = 0,
+    this.followerCount = 0,
+    this.followingCount = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -51,6 +57,9 @@ class UserModel {
       'phone': phone,
 
       'photoUrl': photoUrl,
+      'memeCount': memeCount,
+      'followerCount': followerCount,
+      'followingCount': followingCount,
     };
   }
 
@@ -71,6 +80,9 @@ class UserModel {
       phone: map['phone'],
 
       photoUrl: map['photoUrl'],
+      memeCount: map['memeCount'] ?? 0,
+      followerCount: map['followerCount'] ?? 0,
+      followingCount: map['followingCount'] ?? 0,
     );
   }
 
