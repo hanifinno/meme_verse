@@ -1,58 +1,102 @@
 const {onRequest} = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
-const { PredictionServiceClient } = require("@google-cloud/aiplatform").v1;
+// Import the new, recommended library for Gemini
+const cors = require("cors")({origin: true});
+const Busboy = require("busboy");
+const {VertexAI} = require("@google-cloud/vertexai");
 
 admin.initializeApp();
 
 const project = "memeverse-2bc9f";
 const location = "us-central1";
-const publisher = "google";
-const model = "text-bison";
+// Switch to the Gemini 1.0 Pro Vision model, which can process images
+const model = "gemini-2.5-pro";
 
 exports.generateMemeCaption = onRequest(
   {
     serviceAccount: "meme-caption-ai@memeverse-2bc9f.iam.gserviceaccount.com",
     memory: "512MiB",
+    // Increase timeout as fetching an image and calling the model can take time
+    timeoutSeconds: 120,
   },
-  async (req, res) => {
-  try {
-    const client = new PredictionServiceClient({
-      apiEndpoint: 'us-central1-aiplatform.googleapis.com',
-    });
-    const { imageUrl } = req.body;
+  (req, res) => {
+    // Handle CORS for cross-origin requests from your app.
+    cors(req, res, async () => {
+      if (req.method !== "POST") {
+        return res.status(405).json({error: "Method Not Allowed"});
+      }
 
-    if (!imageUrl) return res.status(400).json({ error: "Missing imageUrl" });
+      try {
+        // Wait for the multipart form to be fully parsed.
+        const files = await new Promise((resolve, reject) => {
+          const busboy = Busboy({headers: req.headers});
+          const files = [];
 
-    const promptText = `Generate 3 funny meme captions for this image URL: ${imageUrl}`;
+          busboy.on("error", (err) => {
+            reject(err);
+          });
 
-    // The AI Platform service expects instances to be in a specific Protobuf JSON format.
-    const instance = {
-      structValue: {
-        fields: {
-          prompt: {
-            stringValue: promptText,
+          busboy.on("file", (fieldname, file, {filename, mimeType}) => {
+            console.log(`Processing file: ${filename} (${mimeType})`);
+            const chunks = [];
+            file.on("data", (chunk) => chunks.push(chunk));
+            file.on("end", () => {
+              files.push({
+                fieldname,
+                buffer: Buffer.concat(chunks),
+                mimeType,
+              });
+            });
+          });
+
+          busboy.on("close", () => {
+            resolve(files);
+          });
+
+          busboy.end(req.rawBody);
+        });
+
+        if (files.length === 0) {
+          return res.status(400).json({error: "No image file uploaded."});
+        }
+
+        const imageFile = files[0];
+        const imageBase64 = imageFile.buffer.toString("base64");
+
+        const vertex_ai = new VertexAI({project: project, location: location});
+        const generativeVisionModel = vertex_ai.getGenerativeModel({model});
+
+        const textPart = {
+          text: "Generate 3 funny, short meme captions for this image. Each caption should be on a new line.",
+        };
+
+        const imagePart = {
+          inlineData: {
+            mimeType: imageFile.mimeType,
+            data: imageBase64,
           },
-        },
-      },
-    };
+        };
 
-    const endpoint = client.projectLocationPublisherModelPath(project, location, publisher, model);
-    const request = {
-      endpoint: endpoint,
-      instances: [instance],
-    };
+        const requestPayload = {
+          contents: [{role: "user", parts: [textPart, imagePart]}],
+        };
 
-    const [response] = await client.predict(request);
+        const result = await generativeVisionModel.generateContent(requestPayload);
+        const content = result.response.candidates[0].content.parts[0].text;
 
-    const prediction = response.predictions[0];
-    const captions = prediction.structValue.fields.content.stringValue
-      .split("\n")
-      .map((c) => c.trim())
-      .filter(Boolean);
+        const captions = content
+            .split("\n")
+            .map((c) => c.replace(/^- /, "").trim())
+            .filter(Boolean);
 
-    res.status(200).json({ captions });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
+        res.status(200).json({captions});
+      } catch (err) {
+        console.error("Function Error:", err);
+        if (!res.headersSent) {
+          // The error from the promise will be caught here
+          res.status(500).json({error: `Error processing request: ${err.message}`});
+        }
+      }
+    });
+  },
+);

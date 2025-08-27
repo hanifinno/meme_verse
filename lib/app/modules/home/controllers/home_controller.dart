@@ -171,6 +171,8 @@ import 'package:meme_verse/app/core/theme/color/app_colors.dart';
 import 'package:meme_verse/app/routes/app_pages.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 
 class HomeController extends GetxController {
   var currentIndex = 0.obs;
@@ -335,6 +337,108 @@ class HomeController extends GetxController {
         backgroundColor: AppColors.RED_COLOR,
         colorText: AppColors.WHITE_COLOR,
       );
+    }
+  }
+
+  Future<void> generateCaptionsForImage() async {
+    if (pickedFile.value == null) {
+      Get.snackbar(
+        'Error',
+        'Please pick an image first.',
+        backgroundColor: AppColors.RED_COLOR,
+        colorText: AppColors.WHITE_COLOR,
+      );
+      return;
+    }
+
+    isLoading.value = true;
+
+    try {
+      // 1. Create a multipart request to send the file directly
+      // IMPORTANT: Replace with your actual deployed function URL from the prerequisite step.
+      final functionUrl =
+          'https://us-central1-memeverse-2bc9f.cloudfunctions.net/generateMemeCaption';
+      final request = http.MultipartRequest('POST', Uri.parse(functionUrl));
+
+      // 2. Attach the file to the request
+      final file = pickedFile.value!;
+      final mimeType = lookupMimeType(file.path);
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'image', // This fieldname must match what the backend expects
+          file.path,
+          contentType: mimeType != null ? MediaType.parse(mimeType) : null,
+        ),
+      );
+
+      // 3. Send the request and get the response
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // 4. Handle the response from the AI function (same as before)
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final captions = List<String>.from(data['captions']);
+
+        if (captions.isEmpty) {
+          Get.snackbar(
+            'Info',
+            'AI could not generate captions for this image.',
+          );
+          return;
+        }
+
+        // 5. Show a bottom sheet for the user to select a caption
+        await Get.bottomSheet(
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1E1E1E), // Example color
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: captions.length,
+              itemBuilder: (context, index) => ListTile(
+                title: Text(
+                  captions[index],
+                  style: const TextStyle(color: Colors.white),
+                ),
+                onTap: () {
+                  titleController.text = captions[index];
+                  Get.back(); // Close the bottom sheet
+                },
+              ),
+            ),
+          ),
+          backgroundColor: Colors.transparent,
+        );
+      } else {
+        // Improved error handling to show more details from the server
+        String errorMessage =
+            "Server error with status code: ${response.statusCode}";
+        try {
+          // Try to parse the error as JSON, which is the expected format
+          final errorData = jsonDecode(response.body);
+          errorMessage = 'Failed to generate captions: ${errorData['error']}';
+        } catch (_) {
+          // If parsing fails, the response was not JSON. Show the raw text.
+          errorMessage += "\nRaw response: ${response.body}";
+          debugPrint('Error :::::::::::::::$errorMessage');
+        }
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      debugPrint('Error :::::::::::::::$e');
+
+      Get.snackbar(
+        'Error',
+        'An error occurred: $e',
+        backgroundColor: AppColors.RED_COLOR,
+        colorText: AppColors.WHITE_COLOR,
+      );
+    } finally {
+      isLoading.value = false;
     }
   }
 

@@ -81,117 +81,35 @@ class UploadMemePage extends GetView<HomeController> {
               SizedBox(height: 16),
 
               // PICK IMAGE & GENERATE CAPTION
+              // In your upload_page.dart
+
+              // Button to pick an image from the gallery
               CustomWidgets.customButton(
-                label: "Pick Image & Generate Caption",
-                onPressed: () async {
-                  try {
-                    // 1. Pick image
-                    final picked = await ImagePicker().pickImage(
-                      source: ImageSource.gallery,
-                    );
-                    if (picked == null) {
-                      Get.snackbar('Error', 'No image selected');
-                      return;
-                    }
-
-                    controller.pickedFile.value = File(picked.path);
-                    controller.isLoading.value = true;
-
-                    // 2. Temporarily upload image to public bucket
-                    final tempFileName =
-                        'temp_${DateTime.now().millisecondsSinceEpoch}.jpg';
-                    await supabase.storage
-                        .from('memes-temp')
-                        .upload(
-                          tempFileName,
-                          controller.pickedFile.value!,
-                          fileOptions: const FileOptions(upsert: true),
-                        );
-
-                    final tempUrl = supabase.storage
-                        .from('memes-temp')
-                        .getPublicUrl(tempFileName);
-
-                    // 3. Send form-data to Edge Function
-                    final uri = Uri.parse(
-                      'https://cicipihemdigpsthnibk.supabase.co/functions/v1/meme-captions', // Updated to match function name
-                    );
-                    final request = http.MultipartRequest('POST', uri)
-                      ..headers['Authorization'] =
-                          'Bearer ${AppConstant.SUPABASE_ANON_KEY}'
-                      ..fields['imageUrl'] = tempUrl;
-
-                    final streamedResponse = await request.send();
-                    final response = await http.Response.fromStream(
-                      streamedResponse,
-                    );
-
-                    // 4. Handle response
-                    if (response.statusCode != 200) {
-                      Get.snackbar(
-                        'Error',
-                        'Failed to generate captions: ${response.body}',
-                      );
-                      return;
-                    }
-
-                    final data = jsonDecode(response.body);
-                    final captions = (data['captions'] as List<dynamic>)
-                        .map((e) => e.toString())
-                        .toList();
-
-                    if (captions.isEmpty) {
-                      Get.snackbar('Error', 'No captions generated');
-                      return;
-                    }
-
-                    // 5. Show bottom sheet for caption selection
-                    await Get.bottomSheet(
-                      Animate(
-                        effects: [
-                          SlideEffect(
-                            begin: const Offset(0, 1),
-                            end: const Offset(0, 0),
-                            duration: const Duration(milliseconds: 300),
-                          ),
-                        ],
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF1E1E1E),
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(24),
-                            ),
-                          ),
-                          child: ListView.builder(
-                            itemCount: captions.length,
-                            itemBuilder: (context, index) => ListTile(
-                              title: Text(
-                                captions[index],
-                                style: GoogleFonts.poppins(color: Colors.white),
-                              ),
-                              onTap: () {
-                                controller.titleController.text =
-                                    captions[index];
-                                Get.back();
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                      backgroundColor: Colors.transparent,
-                    );
-
-                    // 6. Remove temp image
-                    await supabase.storage.from('memes-temp').remove([
-                      tempFileName,
-                    ]);
-                  } catch (e) {
-                    Get.snackbar('Error', 'Something went wrong: $e');
-                  } finally {
-                    controller.isLoading.value = false;
-                  }
-                },
+                label: "Pick Image",
+                onPressed: controller.pickImage,
               ),
+
+              const SizedBox(height: 16),
+
+              // Button to generate captions for the picked image
+              // It's wrapped in an Obx to be enabled/disabled based on whether an image is picked.
+              CustomWidgets.customButton(
+                label: "Generate AI Caption",
+                onPressed: controller.generateCaptionsForImage,
+              ),
+
+              const SizedBox(height: 16),
+
+              // Your existing text field for the title/caption
+              // e.g., CustomTextField(controller: controller.titleController, ...)
+              const SizedBox(height: 16),
+
+              // Your existing button to perform the final upload
+              CustomWidgets.customButton(
+                label: "Upload Meme",
+                onPressed: controller.uploadMeme,
+              ),
+
               SizedBox(height: 16),
 
               // PICK IMAGE ONLY
