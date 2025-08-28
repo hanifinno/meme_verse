@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:meme_verse/app/core/models/comment_model.dart';
 import 'package:meme_verse/app/core/models/user_model.dart';
 
@@ -114,6 +115,32 @@ class MemeModel {
       username: user.name,
       userAvatar: user.photoUrl,
       userFollowerCount: user.followerCount,
+    );
+  }
+
+  factory MemeModel.fromFirestore(
+    DocumentSnapshot doc,
+    String currentUserId,
+    Set<String> savedMemeIds,
+  ) {
+    final data = doc.data() as Map<String, dynamic>;
+    final List<dynamic> likedBy = data['likedBy'] ?? [];
+
+    return MemeModel(
+      id: doc.id,
+      imageUrl: data['imageUrl'],
+      title: data['title'],
+      uploadedBy: data['uploaderId'],
+      likeCount: data['likeCount'] ?? 0,
+      commentCount: data['commentCount'] ?? 0,
+      shareCount: data['shareCount'] ?? 0,
+      saveCount: data['saveCount'] ?? 0,
+      username: data['uploaderName'],
+      userAvatar: data['uploaderAvatar'],
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      isLikedByUser: likedBy.contains(currentUserId),
+      isSaved: savedMemeIds.contains(doc.id),
+      isTrending: data['isTrending'] ?? false,
     );
   }
 }

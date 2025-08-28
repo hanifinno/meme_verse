@@ -167,6 +167,7 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:meme_verse/app/core/config/app_constant.dart';
 import 'package:meme_verse/app/core/models/meme_model.dart';
+import 'package:meme_verse/app/core/models/comment_model.dart';
 import 'package:meme_verse/app/core/theme/color/app_colors.dart';
 import 'package:meme_verse/app/routes/app_pages.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -192,13 +193,14 @@ class HomeController extends GetxController
   String get userId => FirebaseAuth.instance.currentUser?.uid ?? '';
 
   @override
-  void onInit() {
+  void onInit() async {
     super.onInit();
     // Fetch feeds and recommendations on initialization
-    refreshFeed();
-    refreshTrending();
-    fetchRecommendations();
     tabController = TabController(length: 3, vsync: this);
+
+    await refreshFeed();
+    await refreshTrending();
+    await fetchRecommendations();
   }
 
   @override
@@ -214,23 +216,20 @@ class HomeController extends GetxController
   Future<void> refreshFeed() async {
     try {
       isLoading.value = true;
-      final snapshot = await firestore.collection('memes').get();
-      final List<MemeModel> memes = [];
-      for (var doc in snapshot.docs) {
-        final memeList = doc['memeList'] as List<dynamic>? ?? [];
-        for (var meme in memeList) {
-          if (meme['isTrending'] == false || meme['isTrending'] == null) {
-            memes.add(
-              MemeModel(
-                id: doc.id,
-                imageUrl: meme['imageUrl'] ?? '',
-                title: meme['title'] ?? '',
-                likeCount: meme['likeCount'] ?? 0,
-              ),
-            );
-          }
-        }
-      }
+      // Fetch memes that are not trending, ordered by creation date
+      final snapshot = await firestore
+          .collection('memes')
+          .where('isTrending', isEqualTo: false)
+          .orderBy('createdAt', descending: true)
+          .limit(20) // Basic pagination
+          .get();
+
+      // Fetch user's saved memes to determine `isSaved` status
+      final savedMemes = await _getSavedMemeIds();
+
+      final memes = snapshot.docs
+          .map((doc) => MemeModel.fromFirestore(doc, userId, savedMemes))
+          .toList();
       feedList.assignAll(memes);
     } catch (e) {
       Get.snackbar(
@@ -247,23 +246,20 @@ class HomeController extends GetxController
   Future<void> refreshTrending() async {
     try {
       isLoading.value = true;
-      final snapshot = await firestore.collection('memes').get();
-      final List<MemeModel> memes = [];
-      for (var doc in snapshot.docs) {
-        final memeList = doc['memeList'] as List<dynamic>? ?? [];
-        for (var meme in memeList) {
-          if (meme['isTrending'] == true) {
-            memes.add(
-              MemeModel(
-                id: doc.id,
-                imageUrl: meme['imageUrl'] ?? '',
-                title: meme['title'] ?? '',
-                likeCount: meme['likeCount'] ?? 0,
-              ),
-            );
-          }
-        }
-      }
+      // Fetch memes that are trending, ordered by creation date
+      final snapshot = await firestore
+          .collection('memes')
+          .where('isTrending', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(20) // Basic pagination
+          .get();
+
+      final savedMemes = await _getSavedMemeIds();
+
+      final memes = snapshot.docs
+          .map((doc) => MemeModel.fromFirestore(doc, userId, savedMemes))
+          .toList();
+
       trendingList.assignAll(memes);
     } catch (e) {
       Get.snackbar(
@@ -275,6 +271,20 @@ class HomeController extends GetxController
     } finally {
       isLoading.value = false;
     }
+  }
+
+  Future<Set<String>> _getSavedMemeIds() async {
+    if (userId.isEmpty) return {};
+    try {
+      final userDoc = await firestore.collection('users').doc(userId).get();
+      if (userDoc.exists && userDoc.data()!.containsKey('savedMemes')) {
+        final List<dynamic> savedIds = userDoc.data()!['savedMemes'];
+        return Set<String>.from(savedIds);
+      }
+    } catch (e) {
+      debugPrint("Could not fetch saved memes: $e");
+    }
+    return {};
   }
 
   Future<void> fetchRecommendations() async {
@@ -469,18 +479,26 @@ class HomeController extends GetxController
       final file = pickedFile.value!;
       await supabase.storage.from('memes').upload(fileName, file);
       final publicUrl = supabase.storage.from('memes').getPublicUrl(fileName);
-      final docRef = firestore.collection('memes').doc('memeId');
+
+      // Create a new document in the 'memes' collection with an auto-generated ID
+      final docRef = firestore.collection('memes').doc();
+
       await docRef.set({
-        'memeList': FieldValue.arrayUnion([
-          {
-            'imageUrl': publicUrl,
-            'title': titleController.text,
-            'likeCount': 0,
-            'isTrending': false,
-            'createdAt': DateTime.now().toUtc().toIso8601String(),
-          },
-        ]),
-      }, SetOptions(merge: true));
+        'id': docRef.id,
+        'imageUrl': publicUrl,
+        'title': titleController.text,
+        'uploaderId': userId,
+        'uploaderName':
+            FirebaseAuth.instance.currentUser?.displayName ?? 'Anonymous',
+        'uploaderAvatar': FirebaseAuth.instance.currentUser?.photoURL,
+        'likeCount': 0,
+        'commentCount': 0,
+        'shareCount': 0,
+        'saveCount': 0,
+        'likedBy': [],
+        'isTrending': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
       Get.snackbar(
         'Success',
         'Meme uploaded successfully!',
@@ -500,6 +518,158 @@ class HomeController extends GetxController
     } finally {
       isLoading.value = false;
     }
+  }
+
+  Future<void> toggleLike(String memeId) async {
+    if (userId.isEmpty) return;
+
+    final memeRef = firestore.collection('memes').doc(memeId);
+
+    // Optimistic UI update
+    _updateLocalMeme(memeId, (meme) {
+      meme.isLikedByUser = !(meme.isLikedByUser ?? false);
+      meme.likeCount = (meme.likeCount ?? 0) + (meme.isLikedByUser! ? 1 : -1);
+    });
+
+    // Backend update
+    try {
+      await firestore.runTransaction((transaction) async {
+        final snapshot = await transaction.get(memeRef);
+        if (!snapshot.exists) throw Exception("Meme does not exist!");
+
+        final List<dynamic> likedBy = snapshot.data()?['likedBy'] ?? [];
+        final isCurrentlyLiked = likedBy.contains(userId);
+
+        if (isCurrentlyLiked) {
+          transaction.update(memeRef, {
+            'likedBy': FieldValue.arrayRemove([userId]),
+            'likeCount': FieldValue.increment(-1),
+          });
+        } else {
+          transaction.update(memeRef, {
+            'likedBy': FieldValue.arrayUnion([userId]),
+            'likeCount': FieldValue.increment(1),
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint("Failed to toggle like: $e");
+      // Revert optimistic update on error
+      _updateLocalMeme(memeId, (meme) {
+        meme.isLikedByUser = !(meme.isLikedByUser ?? false);
+        meme.likeCount = (meme.likeCount ?? 0) + (meme.isLikedByUser! ? 1 : -1);
+      });
+      Get.snackbar('Error', 'Could not update like status.');
+    }
+  }
+
+  Future<void> toggleSave(String memeId) async {
+    if (userId.isEmpty) return;
+
+    final userRef = firestore.collection('users').doc(userId);
+    final memeRef = firestore.collection('memes').doc(memeId);
+
+    // Optimistic UI update
+    _updateLocalMeme(memeId, (meme) {
+      meme.isSaved = !(meme.isSaved ?? false);
+    });
+
+    // Backend update
+    try {
+      final userDoc = await userRef.get();
+      final isCurrentlySaved =
+          userDoc.exists &&
+          (userDoc.data()?['savedMemes'] as List? ?? []).contains(memeId);
+
+      final batch = firestore.batch();
+
+      if (isCurrentlySaved) {
+        batch.update(userRef, {
+          'savedMemes': FieldValue.arrayRemove([memeId]),
+        });
+        batch.update(memeRef, {'saveCount': FieldValue.increment(-1)});
+      } else {
+        batch.set(userRef, {
+          'savedMemes': FieldValue.arrayUnion([memeId]),
+        }, SetOptions(merge: true));
+        batch.update(memeRef, {'saveCount': FieldValue.increment(1)});
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint("Failed to toggle save: $e");
+      _updateLocalMeme(memeId, (meme) {
+        meme.isSaved = !(meme.isSaved ?? false);
+      });
+      Get.snackbar('Error', 'Could not save meme.');
+    }
+  }
+
+  Future<void> shareMeme(MemeModel meme) async {
+    // In a real app, you'd use a package like `share_plus` here.
+    // e.g., await Share.share('Check out this meme from MemeVerse! ${meme.imageUrl}');
+
+    // For now, we just increment the share count on the backend.
+    try {
+      await firestore.collection('memes').doc(meme.id).update({
+        'shareCount': FieldValue.increment(1),
+      });
+    } catch (e) {
+      debugPrint("Failed to increment share count: $e");
+    }
+  }
+
+  Future<List<CommentModel>> getCommentsForMeme(String memeId) async {
+    try {
+      final snapshot = await firestore
+          .collection('memes')
+          .doc(memeId)
+          .collection('comments')
+          .orderBy('createdAt', descending: true)
+          .limit(50)
+          .get();
+
+      return snapshot.docs
+          .map((doc) => CommentModel.fromFirestore(doc, userId))
+          .toList();
+    } catch (e) {
+      debugPrint("Error fetching comments: $e");
+      Get.snackbar('Error', 'Could not load comments.');
+      return [];
+    }
+  }
+
+  Future<void> postComment(String memeId, String text) async {
+    if (userId.isEmpty || text.trim().isEmpty) return;
+
+    final memeRef = firestore.collection('memes').doc(memeId);
+    final commentRef = memeRef.collection('comments').doc();
+
+    final newComment = CommentModel(
+      id: commentRef.id,
+      memeId: memeId,
+      text: text.trim(),
+      userId: userId,
+      userName: FirebaseAuth.instance.currentUser?.displayName ?? 'Anonymous',
+      userAvatarUrl: FirebaseAuth.instance.currentUser?.photoURL,
+      createdAt:
+          DateTime.now(), // This is for local display, server will use its own timestamp
+    );
+
+    final batch = firestore.batch();
+    batch.set(commentRef, newComment.toFirestore());
+    batch.update(memeRef, {'commentCount': FieldValue.increment(1)});
+
+    await batch.commit();
+  }
+
+  void _updateLocalMeme(String memeId, Function(MemeModel meme) updateFn) {
+    final feedIndex = feedList.indexWhere((m) => m.id == memeId);
+    if (feedIndex != -1) updateFn(feedList[feedIndex]);
+
+    final trendingIndex = trendingList.indexWhere((m) => m.id == memeId);
+    if (trendingIndex != -1) updateFn(trendingList[trendingIndex]);
+
+    refresh(); // This will trigger a UI update for GetX observers
   }
 
   GoogleSignIn googleSignIn = GoogleSignIn.instance;

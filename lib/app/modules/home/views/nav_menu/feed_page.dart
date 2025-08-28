@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:meme_verse/app/core/models/comment_model.dart';
 import 'package:meme_verse/app/core/config/app_assets.dart';
 import 'package:meme_verse/app/core/models/meme_model.dart';
 import 'package:meme_verse/app/core/theme/color/app_colors.dart';
@@ -307,13 +308,18 @@ class FeedPage extends GetView<HomeController> {
       return SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
           final meme = memeList[index];
-          return _buildInteractiveMemeCard(meme, isTrending, index);
+          return _buildInteractiveMemeCard(context, meme, isTrending, index);
         }, childCount: memeList.length),
       );
     });
   }
 
-  Widget _buildInteractiveMemeCard(MemeModel meme, bool isTrending, int index) {
+  Widget _buildInteractiveMemeCard(
+    BuildContext context,
+    MemeModel meme,
+    bool isTrending,
+    int index,
+  ) {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: InkWell(
@@ -339,8 +345,8 @@ class FeedPage extends GetView<HomeController> {
                     children: [
                       _buildUserInfoSection(meme),
                       _buildMemeImage(meme),
-                      _buildInteractionButtons(meme),
-                      _buildCaptionAndStats(meme),
+                      _buildInteractionButtons(context, meme),
+                      _buildCaptionAndCommentsSection(context, meme),
                     ],
                   ),
                 )
@@ -500,7 +506,7 @@ class FeedPage extends GetView<HomeController> {
     );
   }
 
-  Widget _buildInteractionButtons(MemeModel meme) {
+  Widget _buildInteractionButtons(BuildContext context, MemeModel meme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(
@@ -512,7 +518,7 @@ class FeedPage extends GetView<HomeController> {
             meme.isLikedByUser ?? false,
             AppColors.SECONDARY_COLOR,
             () {
-              // controller.toggleLike(meme.id!);
+              controller.toggleLike(meme.id!);
             },
           ),
           _buildInteractionButton(
@@ -520,7 +526,7 @@ class FeedPage extends GetView<HomeController> {
             meme.commentCount ?? 0,
             false,
             AppColors.WARNING_COLOR,
-            () => Get.toNamed(Routes.MEME_DETAILS, arguments: meme),
+            () => _showCommentsBottomSheet(context, meme),
           ),
           _buildInteractionButton(
             Iconsax.share,
@@ -528,7 +534,7 @@ class FeedPage extends GetView<HomeController> {
             false,
             AppColors.GREEN_COLOR,
             () {
-              // controller.shareMeme(meme);
+              controller.shareMeme(meme);
             },
           ),
           _buildInteractionButton(
@@ -537,7 +543,7 @@ class FeedPage extends GetView<HomeController> {
             meme.isSaved ?? false,
             AppColors.PRIMARY_COLOR,
             () {
-              // controller.toggleSave(meme.id!);
+              controller.toggleSave(meme.id!);
             },
           ),
         ],
@@ -579,67 +585,50 @@ class FeedPage extends GetView<HomeController> {
     );
   }
 
-  Widget _buildCaptionAndStats(MemeModel meme) {
+  Widget _buildCaptionAndCommentsSection(BuildContext context, MemeModel meme) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (meme.title != null && meme.title!.isNotEmpty)
-            Text(
-              meme.title!,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: AppColors.WHITE_COLOR,
-                fontWeight: FontWeight.w500,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4.0),
+              child: RichText(
+                text: TextSpan(
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: AppColors.WHITE_COLOR,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '${meme.username ?? 'User'} ',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    TextSpan(
+                      text: meme.title!,
+                      style: const TextStyle(fontWeight: FontWeight.normal),
+                    ),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildStatChip(
-                Iconsax.heart,
-                meme.likeCount ?? 0,
-                AppColors.SECONDARY_COLOR,
+          const SizedBox(height: 4),
+          InkWell(
+            onTap: () => _showCommentsBottomSheet(context, meme),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Text(
+                (meme.commentCount ?? 0) > 0
+                    ? 'View all ${meme.commentCount} comments'
+                    : 'Add a comment...',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: AppColors.GREY_TEXT_COLOR,
+                ),
               ),
-              const SizedBox(width: 8),
-              _buildStatChip(
-                Iconsax.message,
-                meme.commentCount ?? 0,
-                AppColors.ORANGE_COLOR,
-              ),
-              const SizedBox(width: 8),
-              _buildStatChip(
-                Iconsax.share,
-                meme.shareCount ?? 0,
-                AppColors.GREEN_COLOR,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatChip(IconData icon, int count, Color color) {
-    if (count <= 0) return const SizedBox.shrink();
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            _formatCount(count),
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: color,
-              fontWeight: FontWeight.w500,
             ),
           ),
         ],
@@ -663,6 +652,33 @@ class FeedPage extends GetView<HomeController> {
     if (count < 1000) return count.toString();
     if (count < 1000000) return '${(count / 1000).toStringAsFixed(1)}K';
     return '${(count / 1000000).toStringAsFixed(1)}M';
+  }
+
+  void _showCommentsBottomSheet(BuildContext context, MemeModel meme) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          builder: (_, scrollController) => Container(
+            decoration: BoxDecoration(
+              color: AppColors.GRAY_WHITE_COLOR,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
+            ),
+            child: _CommentsSection(
+              meme: meme,
+              scrollController: scrollController,
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -688,5 +704,192 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
     return false;
+  }
+}
+
+class _CommentsSection extends StatefulWidget {
+  final MemeModel meme;
+  final ScrollController scrollController;
+
+  const _CommentsSection({required this.meme, required this.scrollController});
+
+  @override
+  State<_CommentsSection> createState() => _CommentsSectionState();
+}
+
+class _CommentsSectionState extends State<_CommentsSection> {
+  final homeController = Get.find<HomeController>();
+  final textController = TextEditingController();
+  late List<CommentModel> _comments;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchComments();
+  }
+
+  Future<void> _fetchComments() async {
+    // In a real app, you'd fetch this from your backend
+    // e.g., _comments = await homeController.getCommentsForMeme(widget.meme.id!);
+    await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
+    if (mounted) {
+      setState(() {
+        // _comments = CommentModel.getMockComments();
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _postComment() {
+    if (textController.text.trim().isEmpty) return;
+
+    // In a real app, you would call your controller:
+    // await homeController.postComment(widget.meme.id!, textController.text.trim());
+
+    // For this UI demo, we'll add it locally:
+    final newComment = CommentModel(
+      id: DateTime.now().toIso8601String(),
+      userName: 'You', // Replace with actual current user's name
+      userAvatarUrl: null, // Replace with actual current user's avatar
+      text: textController.text.trim(),
+      createdAt: DateTime.now(),
+    );
+    setState(() {
+      _comments.insert(0, newComment);
+      // Optimistically update the comment count on the meme model
+      widget.meme.commentCount = (widget.meme.commentCount ?? 0) + 1;
+    });
+    textController.clear();
+    FocusScope.of(context).unfocus(); // Dismiss keyboard
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12.0),
+          child: Text(
+            'Comments',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.WHITE_COLOR,
+            ),
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.GREY_TEXT_COLOR),
+        Expanded(
+          child: _isLoading
+              ? Center(child: CustomWidgets.customLottieLoader())
+              : _comments.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No comments yet. Be the first!',
+                    style: TextStyle(color: AppColors.GREY_TEXT_COLOR),
+                  ),
+                )
+              : ListView.builder(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _comments.length,
+                  itemBuilder: (context, index) {
+                    final comment = _comments[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        radius: 18,
+                        backgroundColor: AppColors.PRIMARY_COLOR.withOpacity(
+                          0.2,
+                        ),
+                        backgroundImage: comment.userAvatarUrl != null
+                            ? NetworkImage(comment.userAvatarUrl!)
+                            : null,
+                        child: comment.userAvatarUrl == null
+                            ? Image.asset(AppAssets.APP_USER_PROFILE)
+                            : null,
+                      ),
+                      title: RichText(
+                        text: TextSpan(
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: AppColors.WHITE_COLOR,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: '${comment.userName} ',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            TextSpan(
+                              text: comment.text,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      subtitle: Text(
+                        _formatTime(comment.createdAt ?? DateTime.now()),
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: AppColors.GREY_TEXT_COLOR,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        const Divider(height: 1, color: AppColors.GREY_TEXT_COLOR),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: textController,
+                  style: const TextStyle(color: AppColors.WHITE_COLOR),
+                  decoration: InputDecoration(
+                    hintText: 'Add a comment...',
+                    hintStyle: const TextStyle(
+                      color: AppColors.GREY_TEXT_COLOR,
+                    ),
+                    filled: true,
+                    fillColor: AppColors.BLACK_COLOR,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 0,
+                    ),
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(
+                  Iconsax.send_1,
+                  color: AppColors.PRIMARY_COLOR,
+                ),
+                onPressed: _postComment,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final difference = now.difference(time);
+
+    if (difference.inMinutes < 1) return 'Just now';
+    if (difference.inHours < 1) return '${difference.inMinutes}m';
+    if (difference.inDays < 1) return '${difference.inHours}h';
+    return '${difference.inDays}d';
   }
 }

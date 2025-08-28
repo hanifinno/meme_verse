@@ -112,26 +112,26 @@ class UploadMemePage extends GetView<HomeController> {
 
               SizedBox(height: 16),
 
-              // PICK IMAGE ONLY
-              CustomWidgets.customButton(
-                label: "Pick Image",
-                onPressed: () async => await controller.pickImage(),
-              ),
+              // // PICK IMAGE ONLY
+              // CustomWidgets.customButton(
+              //   label: "Pick Image",
+              //   onPressed: () async => await controller.pickImage(),
+              // ),
 
-              SizedBox(height: 16),
+              // SizedBox(height: 16),
 
-              // UPLOAD MEME
-              Obx(() {
-                return controller.isLoading.value
-                    ? CustomWidgets.customLottieLoader()
-                    : CustomWidgets.customButton(
-                        label: "Upload Meme",
-                        onPressed: () async {
-                          await controller.uploadMeme();
-                          Get.offNamed(Routes.HOME);
-                        },
-                      );
-              }),
+              // // UPLOAD MEME
+              // Obx(() {
+              //   return controller.isLoading.value
+              //       ? CustomWidgets.customLottieLoader()
+              //       : CustomWidgets.customButton(
+              //           label: "Upload Meme",
+              //           onPressed: () async {
+              //             await controller.uploadMeme();
+              //             Get.offNamed(Routes.HOME);
+              //           },
+              //         );
+              // }),
             ],
           ),
         ),
