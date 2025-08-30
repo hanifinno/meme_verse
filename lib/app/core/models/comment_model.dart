@@ -1,90 +1,104 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get/get.dart';
 import 'package:meme_verse/app/core/models/reply_model.dart';
 
 class CommentModel {
-  String? id;
-  String? memeId;
-  String? userId;
-  String? userName;
+  String id;
+  String memeId;
+  String text;
+  String userId;
+  String userName;
   String? userAvatarUrl;
-  String? text;
-  DateTime? createdAt;
-  int? likeCount;
-  bool? isReactedByUser;
-  List<ReplyModel>? replies;
+  DateTime createdAt;
+  Map<String, List<String>> reactions;
+  int replyCount;
+
+  // --- UI State (not stored in Firestore) ---
+  // This property will hold the current user's reaction to the comment.
+  // It is populated at read-time and not saved back to Firestore.
+  String? userReaction;
+  final RxList<ReplyModel> replies = <ReplyModel>[].obs;
+  final RxBool areRepliesLoading = false.obs;
+  final RxBool areRepliesVisible = false.obs;
 
   CommentModel({
-    this.id,
-    this.memeId,
-    this.userId,
-    this.userName,
+    required this.id,
+    required this.memeId,
+    required this.text,
+    required this.userId,
+    required this.userName,
     this.userAvatarUrl,
-    this.text,
-    this.createdAt,
-    this.likeCount = 0,
-    this.isReactedByUser = false,
-    this.replies,
+    required this.createdAt,
+    this.reactions = const {},
+    this.replyCount = 0,
+    this.userReaction,
   });
 
-  factory CommentModel.fromMap(Map<String, dynamic> map, String id) {
+  factory CommentModel.fromMap(
+    Map<String, dynamic> data,
+    String id,
+    String currentUserId,
+  ) {
+    final reactionsData = data['reactions'] as Map<String, dynamic>? ?? {};
+    final reactions = reactionsData.map(
+      (key, value) => MapEntry(key, List<String>.from(value as List)),
+    );
+
+    // Determine the current user's reaction based on the provided userId.
+    String? userReaction;
+    for (var entry in reactions.entries) {
+      if (entry.value.contains(currentUserId)) {
+        userReaction = entry.key;
+        break;
+      }
+    }
+
     return CommentModel(
       id: id,
-      memeId: map['memeId'],
-      userId: map['userId'],
-      userName: map['userName'],
-      userAvatarUrl: map['userAvatarUrl'],
-      text: map['text'],
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString())
-          : null,
-      likeCount: map['likeCount'] ?? 0,
-      isReactedByUser: map['isReactedByUser'] ?? false,
+      memeId: data['memeId'] ?? '',
+      text: data['text'] ?? '',
+      userId: data['userId'] ?? '',
+      userName: data['userName'] ?? 'Unknown',
+      userAvatarUrl: data['userAvatarUrl'],
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      reactions: reactions,
+      replyCount: data['replyCount'] ?? 0,
+      userReaction: userReaction,
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'memeId': memeId,
-      'userId': userId,
-      'userName': userName,
-      'userAvatarUrl': userAvatarUrl,
-      'text': text,
-      'createdAt': createdAt?.toIso8601String(),
-      'likeCount': likeCount,
-    };
-  }
-
-  // Factory constructor to create a CommentModel from a Firestore document
   factory CommentModel.fromFirestore(
     DocumentSnapshot doc,
     String currentUserId,
   ) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    final List<dynamic> likedBy = data['likedBy'] ?? [];
-    return CommentModel(
-      id: doc.id,
-      memeId: data['memeId'],
-      userId: data['userId'],
-      userName: data['userName'] ?? 'Anonymous',
-      userAvatarUrl: data['userAvatarUrl'],
-      text: data['text'] ?? '',
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      likeCount: data['likeCount'] ?? 0,
-      isReactedByUser: likedBy.contains(currentUserId),
-    );
+    final data = doc.data() as Map<String, dynamic>;
+    return CommentModel.fromMap(data, doc.id, currentUserId);
   }
 
-  // Method to convert a CommentModel instance to a map for Firestore
   Map<String, dynamic> toFirestore() {
     return {
       'memeId': memeId,
+      'text': text,
       'userId': userId,
       'userName': userName,
       'userAvatarUrl': userAvatarUrl,
-      'text': text,
-      'createdAt': FieldValue.serverTimestamp(),
-      'likeCount': likeCount ?? 0,
-      'likedBy': [],
+      'createdAt': Timestamp.fromDate(createdAt),
+      'replyCount': replyCount,
+      'reactions': reactions,
     };
+  }
+
+  int get totalReactionCount {
+    if (reactions.isEmpty) return 0;
+    return reactions.values.fold(0, (sum, list) => sum + list.length);
+  }
+
+  String? getUserReaction(String userId) {
+    for (var entry in reactions.entries) {
+      if (entry.value.contains(userId)) {
+        return entry.key;
+      }
+    }
+    return null;
   }
 }
