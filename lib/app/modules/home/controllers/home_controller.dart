@@ -10,7 +10,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:meme_verse/app/core/config/app_constant.dart';
 import 'package:meme_verse/app/core/models/meme_model.dart';
 import 'package:meme_verse/app/core/models/comment_model.dart';
+import 'package:meme_verse/app/core/models/reply_model.dart';
 import 'package:meme_verse/app/core/theme/color/app_colors.dart';
+import 'package:meme_verse/app/data/login_credentials.dart';
 import 'package:meme_verse/app/routes/app_pages.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -24,7 +26,19 @@ class HomeController extends GetxController
   var trendingList = <MemeModel>[].obs;
   var recommendations = <Map<String, dynamic>>[].obs;
   var isLoading = false.obs;
+  final Rx<String?> replyingToCommentId = Rx<String?>(null);
+  final Rx<String?> replyingToUsername = Rx<String?>(null);
+  final LoginCredential loginCredential = LoginCredential();
 
+  // Available reactions and their corresponding emojis
+  final Map<String, String> reactionEmojis = {
+    'like': '👍',
+    'love': '❤️',
+    'laugh': '😂',
+    'wow': '😮',
+    'sad': '😢',
+    'angry': '😠',
+  };
   // For comments section
   final RxList<CommentModel> currentMemeComments = <CommentModel>[].obs;
   final RxBool isCommentsLoading = false.obs;
@@ -558,6 +572,165 @@ class HomeController extends GetxController
     // so we need to call refresh() on the list itself.
     feedList.refresh();
     trendingList.refresh();
+  }
+
+  Future<void> postReply(String memeId, String commentId, String text) async {
+    if (text.trim().isEmpty || isPostingComment.value) return;
+
+    try {
+      isPostingComment.value = true;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        Get.snackbar('Error', 'You must be logged in to reply.');
+        return;
+      }
+
+      final newReply = ReplyModel(
+        id: '', // Firestore will generate
+        userId: user.uid,
+        userName: user.displayName ?? 'Anonymous Memer',
+        userAvatarUrl: user.photoURL,
+        text: text.trim(),
+        createdAt: DateTime.now(),
+      );
+
+      final commentRef = firestore
+          .collection('memes')
+          .doc(memeId)
+          .collection('comments')
+          .doc(commentId);
+      final replyDocRef = commentRef.collection('replies').doc();
+      newReply.id = replyDocRef.id;
+
+      // Use a batch write for atomicity
+      final batch = firestore.batch();
+      batch.set(replyDocRef, newReply.toMap());
+      batch.update(commentRef, {'replyCount': FieldValue.increment(1)});
+      await batch.commit();
+
+      // Optimistic UI update
+      final commentIndex = currentMemeComments.indexWhere(
+        (c) => c.id == commentId,
+      );
+      if (commentIndex != -1) {
+        final comment = currentMemeComments[commentIndex];
+        comment.replies.insert(0, newReply);
+        comment.replyCount++;
+        comment.areRepliesVisible.value = true;
+        currentMemeComments.refresh();
+      }
+    } catch (e) {
+      debugPrint("Error posting reply: $e");
+      Get.snackbar('Error', 'Failed to post reply.');
+    } finally {
+      isPostingComment.value = false;
+    }
+  }
+
+  Future<void> getRepliesForComment(String memeId, CommentModel comment) async {
+    if (comment.areRepliesLoading.value) return;
+    try {
+      comment.areRepliesLoading.value = true;
+      final repliesSnapshot = await firestore
+          .collection('memes')
+          .doc(memeId)
+          .collection('comments')
+          .doc(comment.id)
+          .collection('replies')
+          .orderBy('createdAt', descending: false) // Show oldest first
+          .get();
+
+      final replies = repliesSnapshot.docs
+          .map((doc) => ReplyModel.fromFirestore(doc))
+          .toList();
+      comment.replies.assignAll(replies);
+    } catch (e) {
+      debugPrint("Error getting replies: $e");
+    } finally {
+      comment.areRepliesLoading.value = false;
+    }
+  }
+
+  Future<void> toggleCommentReaction(
+    String memeId,
+    String commentId,
+    String reactionType,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final userId = user.uid;
+
+    final commentRef = firestore
+        .collection('memes')
+        .doc(memeId)
+        .collection('comments')
+        .doc(commentId);
+
+    // --- Optimistic UI Update ---
+    final commentIndex = currentMemeComments.indexWhere(
+      (c) => c.id == commentId,
+    );
+    if (commentIndex != -1) {
+      final comment = currentMemeComments[commentIndex];
+      final newReactions = Map<String, List<String>>.from(
+        comment.reactions.map(
+          (key, value) => MapEntry(key, List<String>.from(value)),
+        ),
+      );
+      final currentReaction = comment.getUserReaction(userId);
+
+      if (currentReaction != null) {
+        newReactions[currentReaction]?.remove(userId);
+        if (newReactions[currentReaction]?.isEmpty ?? false) {
+          newReactions.remove(currentReaction);
+        }
+      }
+
+      if (currentReaction != reactionType) {
+        newReactions.putIfAbsent(reactionType, () => []).add(userId);
+      }
+
+      comment.reactions = newReactions;
+      comment.userReaction = comment.getUserReaction(userId);
+      currentMemeComments.refresh();
+    }
+    // --- End of Optimistic UI Update ---
+
+    // Backend update using a transaction for safety
+    try {
+      await firestore.runTransaction((transaction) async {
+        final doc = await transaction.get(commentRef);
+        if (!doc.exists) return;
+
+        final data = doc.data() as Map<String, dynamic>;
+        final reactions = (data['reactions'] as Map<String, dynamic>? ?? {})
+            .map(
+              (key, value) =>
+                  MapEntry(key, List<String>.from(value.cast<String>())),
+            );
+
+        String? userPreviousReaction;
+        reactions.forEach((key, value) {
+          if (value.contains(userId)) userPreviousReaction = key;
+        });
+
+        if (userPreviousReaction != null) {
+          reactions[userPreviousReaction]?.remove(userId);
+          if (reactions[userPreviousReaction]?.isEmpty ?? false) {
+            reactions.remove(userPreviousReaction);
+          }
+        }
+
+        if (userPreviousReaction != reactionType) {
+          reactions.putIfAbsent(reactionType, () => []).add(userId);
+        }
+
+        transaction.update(commentRef, {'reactions': reactions});
+      });
+    } catch (e) {
+      debugPrint("Failed to toggle comment reaction: $e");
+      Get.snackbar('Error', 'Could not update reaction.');
+    }
   }
 
   GoogleSignIn googleSignIn = GoogleSignIn.instance;
