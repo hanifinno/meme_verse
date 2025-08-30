@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:meme_verse/app/core/config/app_assets.dart';
+import 'package:meme_verse/app/core/theme/color/app_colors.dart';
 import 'package:meme_verse/app/core/widgets/custom_widgets.dart';
 import 'package:meme_verse/app/modules/home/controllers/home_controller.dart';
 import 'package:meme_verse/app/modules/home/views/nav_menu/logout_page.dart';
@@ -22,8 +24,12 @@ class ProfilePage extends GetView<HomeController> {
         title: Text(
           "Profile",
           style: GoogleFonts.poppins(
-            color: const Color(0xFFFFFFFF),
+            fontSize: 20,
             fontWeight: FontWeight.bold,
+            foreground: Paint()
+              ..shader = LinearGradient(
+                colors: [AppColors.PRIMARY_COLOR, AppColors.SECONDARY_COLOR],
+              ).createShader(const Rect.fromLTWH(0, 0, 200, 70)),
           ),
         ),
         actions: [
@@ -78,16 +84,17 @@ class ProfilePage extends GetView<HomeController> {
                           child: CircleAvatar(
                             radius: 50,
                             backgroundImage: NetworkImage(
-                              // controller.userProfilePic ?? 
-                              'https://supabase-url/default.jpg',
+                              controller.loginCredential
+                                      .getUserData()
+                                      .photoUrl ??
+                                  AppAssets.APP_USER_PROFILE,
                             ),
-                           
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          // controller.userName ??
-                           'User',
+                          controller.loginCredential.getUserData().name ??
+                              'Anonymous',
                           style: GoogleFonts.poppins(
                             color: const Color(0xFFFFFFFF),
                             fontSize: 20,
@@ -107,6 +114,7 @@ class ProfilePage extends GetView<HomeController> {
                 ],
               ),
             ),
+
             // Padding(
             //   padding: const EdgeInsets.all(16),
             //   child: Wrap(
@@ -136,7 +144,6 @@ class ProfilePage extends GetView<HomeController> {
             //         .toList(),
             //   ),
             // ),
-           
             StreamBuilder(
               stream: FirebaseFirestore.instance
                   .collection('memes')
@@ -159,19 +166,18 @@ class ProfilePage extends GetView<HomeController> {
                     final meme = snapshot.data!.docs[index];
                     return Animate(
                       effects: [
-                        ScaleEffect(
-                          delay: Duration(milliseconds: index * 100),
-                        ),
+                        ScaleEffect(delay: Duration(milliseconds: index * 100)),
                       ],
                       child: GestureDetector(
-                        onTap: () => Get.toNamed(Routes.MEME_DETAILS, arguments: meme.id),
+                        onTap: () => Get.toNamed(
+                          Routes.MEME_DETAILS,
+                          arguments: meme.id,
+                        ),
                         child: Image.network(
                           meme['imageUrl'],
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => const Icon(
-                            Icons.error,
-                            color: Color(0xFFFF1744),
-                          ),
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.error, color: Color(0xFFFF1744)),
                         ),
                       ),
                     );
