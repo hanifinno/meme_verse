@@ -717,6 +717,7 @@ class HomeController extends GetxController
       final currentReaction = comment.getUserReaction(userId);
 
       if (currentReaction != null) {
+        // Remove existing reaction
         newReactions[currentReaction]?.remove(userId);
         if (newReactions[currentReaction]?.isEmpty ?? false) {
           newReactions.remove(currentReaction);
@@ -724,11 +725,19 @@ class HomeController extends GetxController
       }
 
       if (currentReaction != reactionType) {
+        // Add new reaction
         newReactions.putIfAbsent(reactionType, () => []).add(userId);
       }
 
+      // Update local CommentModel
       comment.reactions = newReactions;
       comment.userReaction = comment.getUserReaction(userId);
+      comment.totalReactionCount = newReactions.values.fold(
+        0,
+        (sum, list) => sum + list.length,
+      );
+      currentMemeComments[commentIndex] =
+          comment; // Replace the comment to ensure reactivity
       currentMemeComments.refresh();
     }
     // --- End of Optimistic UI Update ---
@@ -767,6 +776,12 @@ class HomeController extends GetxController
     } catch (e) {
       debugPrint("Failed to toggle comment reaction: $e");
       Get.snackbar('Error', 'Could not update reaction.');
+      // Revert optimistic update on failure
+      if (commentIndex != -1) {
+        await getCommentsForMeme(
+          memeId,
+        ); // Re-fetch comments to restore correct state
+      }
     }
   }
 
