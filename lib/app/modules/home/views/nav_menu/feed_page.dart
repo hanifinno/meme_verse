@@ -649,6 +649,8 @@ class FeedPage extends GetView<HomeController> {
   }
 
   void _showCommentsBottomSheet(BuildContext context, MemeModel meme) {
+    controller.getCommentsForMeme(meme.id!);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -665,7 +667,7 @@ class FeedPage extends GetView<HomeController> {
                 top: Radius.circular(20),
               ),
             ),
-            child: _CommentsSection(
+            child: CommentsSection(
               meme: meme,
               scrollController: scrollController,
             ),
@@ -701,179 +703,232 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   }
 }
 
-class _CommentsSection extends StatefulWidget {
+class CommentsSection extends GetView<HomeController> {
   final MemeModel meme;
   final ScrollController scrollController;
-
-  const _CommentsSection({required this.meme, required this.scrollController});
-
-  @override
-  State<_CommentsSection> createState() => _CommentsSectionState();
-}
-
-class _CommentsSectionState extends State<_CommentsSection> {
-  final homeController = Get.find<HomeController>();
   final textController = TextEditingController();
-  late List<CommentModel> _comments;
-  bool _isLoading = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchComments();
-  }
-
-  Future<void> _fetchComments() async {
-    // In a real app, you'd fetch this from your backend
-    // e.g., _comments = await homeController.getCommentsForMeme(widget.meme.id!);
-    await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
-    if (mounted) {
-      setState(() {
-        // _comments = CommentModel.getMockComments();
-        _isLoading = false;
-      });
-    }
-  }
+  CommentsSection({
+    super.key,
+    required this.meme,
+    required this.scrollController,
+  });
 
   void _postComment() {
     if (textController.text.trim().isEmpty) return;
-
-    // In a real app, you would call your controller:
-    // await homeController.postComment(widget.meme.id!, textController.text.trim());
-
-    // For this UI demo, we'll add it locally:
-    final newComment = CommentModel(
-      id: DateTime.now().toIso8601String(),
-      userName: 'You', // Replace with actual current user's name
-      userAvatarUrl: null, // Replace with actual current user's avatar
-      text: textController.text.trim(),
-      createdAt: DateTime.now(),
-    );
-    setState(() {
-      _comments.insert(0, newComment);
-      // Optimistically update the comment count on the meme model
-      widget.meme.commentCount = (widget.meme.commentCount ?? 0) + 1;
-    });
+    controller.postComment(meme.id!, textController.text);
     textController.clear();
-    FocusScope.of(context).unfocus(); // Dismiss keyboard
+    Get.focusScope?.unfocus();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12.0),
-          child: Text(
-            'Comments',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.WHITE_COLOR,
+    // This Padding moves the content up when the keyboard appears
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        children: [
+          // Handle for the bottom sheet
+          Container(
+            width: 40,
+            height: 5,
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.GREY_TEXT_COLOR.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(10),
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child:
+                //  Obx(
+                //   () =>
+                Text(
+                  'Comments (${_formatCount(meme.commentCount ?? 0)})',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.WHITE_COLOR,
+                  ),
+                ),
+            // ),
+          ),
+          const Divider(height: 20, color: AppColors.GREY_TEXT_COLOR),
+          Expanded(
+            child: Obx(() {
+              if (controller.isCommentsLoading.value) {
+                return Center(child: CustomWidgets.customLottieLoader());
+              }
+              if (controller.currentMemeComments.isEmpty) {
+                return _buildEmptyState();
+              }
+              return ListView.separated(
+                controller: scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: controller.currentMemeComments.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 16),
+                itemBuilder: (context, index) {
+                  final comment = controller.currentMemeComments[index];
+                  return _buildCommentTile(comment)
+                      .animate()
+                      .fadeIn(duration: 300.ms, delay: (50 * index).ms)
+                      .slideX(begin: -0.1, curve: Curves.easeOut);
+                },
+              );
+            }),
+          ),
+          _buildCommentInputField(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Iconsax.message_notif,
+            color: AppColors.GREY_TEXT_COLOR,
+            size: 50,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No comments yet',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              color: AppColors.GREY_TEXT_COLOR,
+            ),
+          ),
+          Text(
+            'Be the first to share your thoughts!',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: AppColors.GREY_TEXT_COLOR.withOpacity(0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentTile(CommentModel comment) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: AppColors.PRIMARY_COLOR.withOpacity(0.2),
+          backgroundImage:
+              comment.userAvatarUrl != null && comment.userAvatarUrl!.isNotEmpty
+              ? CachedNetworkImageProvider(comment.userAvatarUrl!)
+              : null,
+          child: comment.userAvatarUrl == null || comment.userAvatarUrl!.isEmpty
+              ? Image.asset(AppAssets.APP_USER_PROFILE)
+              : null,
         ),
-        const Divider(height: 1, color: AppColors.GREY_TEXT_COLOR),
+        const SizedBox(width: 12),
         Expanded(
-          child: _isLoading
-              ? Center(child: CustomWidgets.customLottieLoader())
-              : _comments.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No comments yet. Be the first!',
-                    style: TextStyle(color: AppColors.GREY_TEXT_COLOR),
-                  ),
-                )
-              : ListView.builder(
-                  controller: widget.scrollController,
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _comments.length,
-                  itemBuilder: (context, index) {
-                    final comment = _comments[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        radius: 18,
-                        backgroundColor: AppColors.PRIMARY_COLOR.withOpacity(
-                          0.2,
-                        ),
-                        backgroundImage: comment.userAvatarUrl != null
-                            ? NetworkImage(comment.userAvatarUrl!)
-                            : null,
-                        child: comment.userAvatarUrl == null
-                            ? Image.asset(AppAssets.APP_USER_PROFILE)
-                            : null,
-                      ),
-                      title: RichText(
-                        text: TextSpan(
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            color: AppColors.WHITE_COLOR,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: '${comment.userName} ',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            TextSpan(
-                              text: comment.text,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      subtitle: Text(
-                        _formatTime(comment.createdAt ?? DateTime.now()),
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          color: AppColors.GREY_TEXT_COLOR,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-        const Divider(height: 1, color: AppColors.GREY_TEXT_COLOR),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: textController,
-                  style: const TextStyle(color: AppColors.WHITE_COLOR),
-                  decoration: InputDecoration(
-                    hintText: 'Add a comment...',
-                    hintStyle: const TextStyle(
-                      color: AppColors.GREY_TEXT_COLOR,
-                    ),
-                    filled: true,
-                    fillColor: AppColors.BLACK_COLOR,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 0,
+              Row(
+                children: [
+                  Text(
+                    comment.userName ?? '',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.WHITE_COLOR,
+                      fontSize: 14,
                     ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '• ${_formatTime(comment.createdAt ?? DateTime.now())}',
+                    style: GoogleFonts.poppins(
+                      color: AppColors.GREY_TEXT_COLOR,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
-              IconButton(
-                icon: const Icon(
-                  Iconsax.send_1,
-                  color: AppColors.PRIMARY_COLOR,
+              const SizedBox(height: 2),
+              Text(
+                comment.text ?? '',
+                style: GoogleFonts.poppins(
+                  color: AppColors.WHITE_COLOR.withOpacity(0.9),
+                  fontSize: 14,
                 ),
-                onPressed: _postComment,
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCommentInputField() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.GRAY_WHITE_COLOR,
+        border: Border(
+          top: BorderSide(
+            color: AppColors.GREY_TEXT_COLOR.withOpacity(0.5),
+            width: 1,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: textController,
+              minLines: 1,
+              maxLines: 4,
+              style: const TextStyle(color: AppColors.WHITE_COLOR),
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Add a comment...',
+                hintStyle: const TextStyle(color: AppColors.GREY_TEXT_COLOR),
+                filled: true,
+                fillColor: AppColors.BLACK_COLOR,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(25),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Obx(
+            () => controller.isPostingComment.value
+                ? const Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(
+                      Iconsax.send_1,
+                      color: AppColors.PRIMARY_COLOR,
+                    ),
+                    onPressed: _postComment,
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -885,5 +940,11 @@ class _CommentsSectionState extends State<_CommentsSection> {
     if (difference.inHours < 1) return '${difference.inMinutes}m';
     if (difference.inDays < 1) return '${difference.inHours}h';
     return '${difference.inDays}d';
+  }
+
+  String _formatCount(int count) {
+    if (count < 1000) return count.toString();
+    if (count < 1000000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return '${(count / 1000000).toStringAsFixed(1)}M';
   }
 }

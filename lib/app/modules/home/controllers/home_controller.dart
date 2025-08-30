@@ -24,6 +24,12 @@ class HomeController extends GetxController
   var trendingList = <MemeModel>[].obs;
   var recommendations = <Map<String, dynamic>>[].obs;
   var isLoading = false.obs;
+
+  // For comments section
+  final RxList<CommentModel> currentMemeComments = <CommentModel>[].obs;
+  final RxBool isCommentsLoading = false.obs;
+  final RxBool isPostingComment = false.obs;
+
   final firestore = FirebaseFirestore.instance;
   final supabase = Supabase.instance.client;
   final ImagePicker _picker = ImagePicker();
@@ -471,48 +477,69 @@ class HomeController extends GetxController
     }
   }
 
-  Future<List<CommentModel>> getCommentsForMeme(String memeId) async {
+  Future<void> getCommentsForMeme(String memeId) async {
     try {
-      final snapshot = await firestore
+      isCommentsLoading.value = true;
+      currentMemeComments.clear();
+      final commentsSnapshot = await firestore
           .collection('memes')
           .doc(memeId)
           .collection('comments')
           .orderBy('createdAt', descending: true)
-          .limit(50)
           .get();
 
-      return snapshot.docs
+      final comments = commentsSnapshot.docs
           .map((doc) => CommentModel.fromFirestore(doc, userId))
           .toList();
+      currentMemeComments.assignAll(comments);
     } catch (e) {
-      debugPrint("Error fetching comments: $e");
+      debugPrint("Failed to get comments: $e");
       Get.snackbar('Error', 'Could not load comments.');
-      return [];
+    } finally {
+      isCommentsLoading.value = false;
     }
   }
 
   Future<void> postComment(String memeId, String text) async {
-    if (userId.isEmpty || text.trim().isEmpty) return;
+    if (text.trim().isEmpty || isPostingComment.value) return;
 
-    final memeRef = firestore.collection('memes').doc(memeId);
-    final commentRef = memeRef.collection('comments').doc();
+    try {
+      isPostingComment.value = true;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        Get.snackbar('Error', 'You must be logged in to comment.');
+        return;
+      }
 
-    final newComment = CommentModel(
-      id: commentRef.id,
-      memeId: memeId,
-      text: text.trim(),
-      userId: userId,
-      userName: FirebaseAuth.instance.currentUser?.displayName ?? 'Anonymous',
-      userAvatarUrl: FirebaseAuth.instance.currentUser?.photoURL,
-      createdAt:
-          DateTime.now(), // This is for local display, server will use its own timestamp
-    );
+      final memeRef = firestore.collection('memes').doc(memeId);
+      final commentRef = memeRef.collection('comments').doc();
 
-    final batch = firestore.batch();
-    batch.set(commentRef, newComment.toFirestore());
-    batch.update(memeRef, {'commentCount': FieldValue.increment(1)});
+      final newComment = CommentModel(
+        id: commentRef.id,
+        memeId: memeId,
+        text: text.trim(),
+        userId: user.uid,
+        userName: user.displayName ?? 'Anonymous Memer',
+        userAvatarUrl: user.photoURL,
+        createdAt: DateTime.now(),
+      );
 
-    await batch.commit();
+      final batch = firestore.batch();
+      batch.set(commentRef, newComment.toFirestore());
+      batch.update(memeRef, {'commentCount': FieldValue.increment(1)});
+      await batch.commit();
+
+      currentMemeComments.insert(0, newComment);
+      _updateLocalMeme(
+        memeId,
+        (meme) => meme.commentCount = (meme.commentCount ?? 0) + 1,
+      );
+    } catch (e) {
+      debugPrint("Error posting comment: $e");
+      Get.snackbar('Error', 'Failed to post comment.');
+    } finally {
+      isPostingComment.value = false;
+    }
   }
 
   void _updateLocalMeme(String memeId, Function(MemeModel meme) updateFn) {
