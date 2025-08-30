@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -432,35 +433,28 @@ class FeedPage extends GetView<HomeController> {
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Image.network(
-            meme.imageUrl ?? '',
+          child: CachedNetworkImage(
+            imageUrl: meme.imageUrl ?? '',
             width: double.infinity,
             height: 300,
             fit: BoxFit.cover,
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Container(
-                height: 300,
-                color: AppColors.GRAY_WHITE_COLOR,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                        : null,
-                    color: AppColors.PRIMARY_COLOR,
-                  ),
+            placeholder: (context, url) => Container(
+              height: 300,
+              color: AppColors.GRAY_WHITE_COLOR,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.PRIMARY_COLOR,
                 ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) => Container(
+              ),
+            ),
+            errorWidget: (context, url, error) => Container(
               height: 300,
               color: AppColors.GRAY_WHITE_COLOR,
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
+                    const Icon(
                       Iconsax.gallery_slash,
                       color: AppColors.GREY_TEXT_COLOR,
                       size: 40,

@@ -1,161 +1,3 @@
-// import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:flutter/material.dart';
-// import 'package:get/get.dart';
-// import 'package:google_sign_in/google_sign_in.dart';
-// import 'package:meme_verse/app/core/models/meme_model.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'dart:io';
-// import 'package:image_picker/image_picker.dart';
-// import 'package:meme_verse/app/routes/app_pages.dart';
-// import 'package:permission_handler/permission_handler.dart';
-// import 'package:supabase_flutter/supabase_flutter.dart';
-
-// class HomeController extends GetxController {
-//   var currentIndex = 0.obs;
-//   var feedList = <MemeModel>[].obs;
-//   final firestore = FirebaseFirestore.instance;
-//   void changeTab(int index) {
-//     currentIndex.value = index;
-//   }
-
-//   @override
-//   void onInit() {
-//     super.onInit();
-//     // Fetch feed when controller initializes
-//     refreshFeed();
-//   }
-
-//   Future<void> refreshFeed() async {
-//     try {
-//       // Get all documents in "memes" collection
-//       final snapshot = await FirebaseFirestore.instance
-//           .collection('memes')
-//           .get();
-
-//       final List<MemeModel> memes = [];
-
-//       for (var doc in snapshot.docs) {
-//         final memeList = doc['memeList'] as List<dynamic>? ?? [];
-//         for (var meme in memeList) {
-//           memes.add(
-//             MemeModel(
-//               id: doc.id, // optionally append index for unique ID
-//               imageUrl: meme['imageUrl'] ?? '',
-//               title: meme['title'] ?? '',
-//               likeCount: meme['likeCount'] ?? 0,
-//             ),
-//           );
-//         }
-//       }
-
-//       feedList.assignAll(memes);
-//     } catch (e) {
-//       debugPrint("Error fetching memes: $e");
-//     }
-//   }
-
-//   final titleController = TextEditingController();
-//   var pickedFile = Rx<File?>(null);
-//   var isLoading = false.obs;
-
-//   final ImagePicker _picker = ImagePicker();
-
-//   Future<void> pickImage() async {
-//     try {
-//       // Check and request gallery permission
-//       final permissionStatus = await Permission.photos.request();
-//       if (!permissionStatus.isGranted) {
-//         print('Gallery permission denied');
-//         return;
-//       }
-
-//       // Pick image from gallery
-//       final picked = await _picker.pickImage(
-//         source: ImageSource.gallery,
-//         maxWidth: 800, // Limit size
-//         maxHeight: 800,
-//         imageQuality: 85, // Compress for JPGs
-//       );
-
-//       if (picked != null) {
-//         pickedFile.value = File(picked.path);
-//       } else {
-//         print('No image selected');
-//       }
-//     } catch (e) {
-//       print('Error picking image: $e');
-//     }
-//   }
-
-//   /// Upload meme
-//   ///
-//   final supabase = Supabase.instance.client;
-
-//   Future<void> uploadMeme(
-//     // TextEditingController titleController,
-//     // Rx<File?> pickedFile,
-//     // RxBool isLoading,
-//   ) async {
-//     if (pickedFile.value == null || titleController.text.isEmpty) {
-//       Get.snackbar("Error", "Please select image and add description");
-//       return;
-//     }
-
-//     try {
-//       isLoading.value = true;
-
-//       // Generate a safe filename
-//       String fileName = "${DateTime.now().millisecondsSinceEpoch}.jpg";
-//       debugPrint('File Name ::: $fileName');
-
-//       // Upload to Supabase Storage
-//       final file = pickedFile.value!;
-//       await supabase.storage.from("memes").upload(fileName, file);
-
-//       // Get public URL
-//       final publicUrl = supabase.storage.from("memes").getPublicUrl(fileName);
-
-//       // 3. Save to Firestore using .set()
-//       final docRef = firestore.collection("memes").doc('memeId');
-
-//       await docRef.set({
-//         "memeList": FieldValue.arrayUnion([
-//           {
-//             "imageUrl": publicUrl,
-//             "title": titleController.text,
-//             // "createdAt": FieldValue.serverTimestamp(),
-//           },
-//         ]),
-//       }, SetOptions(merge: true)); // merge = update if exists, else create
-
-//       Get.snackbar("Success", "Meme uploaded!");
-//       titleController.clear();
-//       pickedFile.value = null;
-//     } catch (e) {
-//       Get.snackbar("Error", e.toString());
-//     } finally {
-//       isLoading.value = false;
-//     }
-//   }
-
-//   GoogleSignIn googleSignIn = GoogleSignIn.instance;
-//   Future<void> signOut() async {
-//     try {
-//       // Sign out from Firebase
-//       await FirebaseAuth.instance.signOut();
-
-//       // Sign out from Google
-
-//       await googleSignIn.signOut();
-//       Get.offAllNamed(Routes.LOGIN);
-
-//       debugPrint("✅ User signed out successfully");
-//     } catch (e) {
-//       debugPrint("❌ Error signing out: $e");
-//     }
-//   }
-// }
-
 import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -200,7 +42,7 @@ class HomeController extends GetxController
 
     await refreshFeed();
     await refreshTrending();
-    await fetchRecommendations();
+    // await fetchRecommendations();
   }
 
   @override
@@ -572,6 +414,7 @@ class HomeController extends GetxController
     // Optimistic UI update
     _updateLocalMeme(memeId, (meme) {
       meme.isSaved = !(meme.isSaved ?? false);
+      meme.saveCount = (meme.saveCount ?? 0) + (meme.isSaved! ? 1 : -1);
     });
 
     // Backend update
@@ -599,6 +442,7 @@ class HomeController extends GetxController
       debugPrint("Failed to toggle save: $e");
       _updateLocalMeme(memeId, (meme) {
         meme.isSaved = !(meme.isSaved ?? false);
+        meme.saveCount = (meme.saveCount ?? 0) + (meme.isSaved! ? 1 : -1);
       });
       Get.snackbar('Error', 'Could not save meme.');
     }
@@ -608,6 +452,11 @@ class HomeController extends GetxController
     // In a real app, you'd use a package like `share_plus` here.
     // e.g., await Share.share('Check out this meme from MemeVerse! ${meme.imageUrl}');
 
+    // Optimistic UI update
+    _updateLocalMeme(meme.id ?? '', (m) {
+      m.shareCount = (m.shareCount ?? 0) + 1;
+    });
+
     // For now, we just increment the share count on the backend.
     try {
       await firestore.collection('memes').doc(meme.id).update({
@@ -615,6 +464,10 @@ class HomeController extends GetxController
       });
     } catch (e) {
       debugPrint("Failed to increment share count: $e");
+      // Revert on error
+      _updateLocalMeme(meme.id ?? '', (m) {
+        m.shareCount = (m.shareCount ?? 0) - 1;
+      });
     }
   }
 
@@ -664,12 +517,20 @@ class HomeController extends GetxController
 
   void _updateLocalMeme(String memeId, Function(MemeModel meme) updateFn) {
     final feedIndex = feedList.indexWhere((m) => m.id == memeId);
-    if (feedIndex != -1) updateFn(feedList[feedIndex]);
+    if (feedIndex != -1) {
+      updateFn(feedList[feedIndex]);
+    }
 
     final trendingIndex = trendingList.indexWhere((m) => m.id == memeId);
-    if (trendingIndex != -1) updateFn(trendingList[trendingIndex]);
+    if (trendingIndex != -1) {
+      updateFn(trendingList[trendingIndex]);
+    }
 
-    refresh(); // This will trigger a UI update for GetX observers
+    // This triggers a UI update for Obx/GetX listeners on these lists.
+    // Modifying an object inside an RxList doesn't automatically trigger an update,
+    // so we need to call refresh() on the list itself.
+    feedList.refresh();
+    trendingList.refresh();
   }
 
   GoogleSignIn googleSignIn = GoogleSignIn.instance;

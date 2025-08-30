@@ -86,7 +86,9 @@ class UploadMemePage extends GetView<HomeController> {
               // Button to pick an image from the gallery
               CustomWidgets.customButton(
                 label: "Pick Image",
-                onPressed: controller.pickImage,
+                onPressed: () {
+                  controller.pickImage();
+                },
               ),
 
               const SizedBox(height: 16),
