@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:meme_verse/app/core/helper_methods/helper_methods.dart';
 import 'package:meme_verse/app/core/models/comment_model.dart';
 import 'package:meme_verse/app/core/config/app_assets.dart';
 import 'package:meme_verse/app/core/models/meme_model.dart';
@@ -11,6 +11,7 @@ import 'package:meme_verse/app/core/models/reply_model.dart';
 import 'package:meme_verse/app/core/theme/color/app_colors.dart';
 import 'package:meme_verse/app/core/widgets/custom_widgets.dart';
 import 'package:meme_verse/app/modules/home/controllers/home_controller.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:meme_verse/app/routes/app_pages.dart';
 
 class FeedPage extends GetView<HomeController> {
@@ -33,9 +34,15 @@ class FeedPage extends GetView<HomeController> {
                 title: Text(
                   'Meme Verse',
                   style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.PRIMARY_COLOR,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    foreground: Paint()
+                      ..shader = LinearGradient(
+                        colors: [
+                          AppColors.PRIMARY_COLOR,
+                          AppColors.SECONDARY_COLOR,
+                        ],
+                      ).createShader(const Rect.fromLTWH(0, 0, 200, 70)),
                   ),
                 ),
                 centerTitle: true,
@@ -389,7 +396,7 @@ class FeedPage extends GetView<HomeController> {
                 ),
                 if (meme.createdAt != null)
                   Text(
-                    _formatTime(meme.createdAt!),
+                    HelperMethods.formatTime(meme.createdAt!),
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: AppColors.GREY_TEXT_COLOR,
@@ -578,7 +585,7 @@ class FeedPage extends GetView<HomeController> {
             iconWidget,
             const SizedBox(width: 6),
             Text(
-              _formatCount(count),
+              HelperMethods.formatCount(count),
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 color: isActive ? activeColor : AppColors.GREY_TEXT_COLOR,
@@ -628,7 +635,7 @@ class FeedPage extends GetView<HomeController> {
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: Text(
                 (meme.commentCount ?? 0) > 0
-                    ? 'View all ${meme.commentCount} comments'
+                    ? 'View all ${HelperMethods.formatCount(meme.commentCount ?? 0)} comments'
                     : 'Add a comment...',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
@@ -640,24 +647,6 @@ class FeedPage extends GetView<HomeController> {
         ],
       ),
     );
-  }
-
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
-
-    if (difference.inMinutes < 1) return 'Just now';
-    if (difference.inHours < 1) return '${difference.inMinutes}m ago';
-    if (difference.inDays < 1) return '${difference.inHours}h ago';
-    if (difference.inDays < 7) return '${difference.inDays}d ago';
-
-    return '${time.day}/${time.month}/${time.year}';
-  }
-
-  String _formatCount(int count) {
-    if (count < 1000) return count.toString();
-    if (count < 1000000) return '${(count / 1000).toStringAsFixed(1)}K';
-    return '${(count / 1000000).toStringAsFixed(1)}M';
   }
 
   void _showCommentsBottomSheet(BuildContext context, MemeModel meme) {
@@ -693,6 +682,7 @@ class FeedPage extends GetView<HomeController> {
     final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
     final offset = renderBox.localToGlobal(Offset.zero);
+    final userReaction = meme.userReaction;
 
     OverlayEntry? overlayEntry;
 
@@ -728,11 +718,40 @@ class FeedPage extends GetView<HomeController> {
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
-                                children: controller.reactionEmojis.entries.map(
-                                  (entry) {
-                                    final index = controller.reactionEmojis.keys
-                                        .toList()
-                                        .indexOf(entry.key);
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      if (userReaction != null) {
+                                        controller.toggleMemeReaction(
+                                          meme.id!,
+                                          userReaction,
+                                        );
+                                      }
+                                      overlayEntry?.remove();
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: 200.ms,
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: userReaction == null
+                                            ? AppColors.PRIMARY_COLOR
+                                                  .withOpacity(0.2)
+                                            : Colors.transparent,
+                                      ),
+                                      child: const Icon(
+                                        Icons.not_interested,
+                                        color: AppColors.GREY_TEXT_COLOR,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ...controller.reactionEmojis.entries.map((
+                                    entry,
+                                  ) {
+                                    final isSelected =
+                                        userReaction == entry.key;
                                     return GestureDetector(
                                       onTap: () {
                                         controller.toggleMemeReaction(
@@ -741,33 +760,41 @@ class FeedPage extends GetView<HomeController> {
                                         );
                                         overlayEntry?.remove();
                                       },
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                        child:
-                                            Text(
+                                      child:
+                                          AnimatedContainer(
+                                                duration: 200.ms,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                    ),
+                                                padding: const EdgeInsets.all(
+                                                  6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: isSelected
+                                                      ? AppColors.PRIMARY_COLOR
+                                                            .withOpacity(0.2)
+                                                      : Colors.transparent,
+                                                ),
+                                                child: Text(
                                                   entry.value,
                                                   style: const TextStyle(
-                                                    fontSize: 24,
+                                                    fontSize: 12,
                                                   ),
-                                                )
-                                                .animate()
-                                                .scale(
-                                                  delay: (50 * index).ms,
-                                                  duration: 200.ms,
-                                                  curve: Curves.easeOut,
-                                                )
-                                                .moveY(
-                                                  begin: 5,
-                                                  end: 0,
-                                                  delay: (50 * index).ms,
-                                                  duration: 200.ms,
                                                 ),
-                                      ),
+                                              )
+                                              .animate(
+                                                target: isSelected ? 1 : 0,
+                                              )
+                                              .scale(
+                                                begin: const Offset(1, 1),
+                                                end: const Offset(1.2, 1.2),
+                                                curve: Curves.elasticOut,
+                                              ),
                                     );
-                                  },
-                                ).toList(),
+                                  }).toList(),
+                                ],
                               ),
                             )
                             .animate()
@@ -866,7 +893,7 @@ class CommentsSection extends GetView<HomeController> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Text(
-              'Comments (${_formatCount(meme.commentCount ?? 0)})',
+              'Comments (${HelperMethods.formatCount(meme.commentCount ?? 0)})',
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -1024,12 +1051,25 @@ class CommentsSection extends GetView<HomeController> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            comment.userName,
-                            style: GoogleFonts.poppins(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.PRIMARY_COLOR,
-                              fontSize: 15,
+                          RichText(
+                            text: TextSpan(
+                              style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.PRIMARY_COLOR,
+                                fontSize: 15,
+                              ),
+                              children: [
+                                TextSpan(text: comment.userName),
+                                TextSpan(
+                                  text:
+                                      '  ·  ${HelperMethods.formatTime(comment.createdAt)}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.normal,
+                                    color: AppColors.GREY_TEXT_COLOR,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -1040,6 +1080,7 @@ class CommentsSection extends GetView<HomeController> {
                               fontSize: 14,
                             ),
                           ),
+                          _buildCommentActions(context, comment),
                           if (comment.totalReactionCount > 0)
                             const SizedBox(
                               height: 24,
@@ -1048,14 +1089,13 @@ class CommentsSection extends GetView<HomeController> {
                       ),
                       if (comment.totalReactionCount > 0)
                         Positioned(
-                          bottom: 0,
-                          right: 0,
+                          bottom: 4,
+                          right: 4,
                           child: _buildReactionSummary(comment),
                         ),
                     ],
                   ),
                 ),
-                _buildCommentActions(context, comment),
                 _buildRepliesSection(context, meme, comment),
               ],
             ).animate().fade(duration: 200.ms),
@@ -1183,6 +1223,7 @@ class CommentsSection extends GetView<HomeController> {
     final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
     final offset = renderBox.localToGlobal(Offset.zero);
+    final screenWidth = MediaQuery.of(context).size.width;
 
     OverlayEntry? overlayEntry;
 
@@ -1195,7 +1236,10 @@ class CommentsSection extends GetView<HomeController> {
             child: Stack(
               children: [
                 Positioned(
-                  left: offset.dx,
+                  // Adjusted position to prevent overflow
+                  left: (offset.dx + 320 > screenWidth)
+                      ? screenWidth - 320
+                      : (offset.dx > 16 ? offset.dx : 16),
                   top: offset.dy - 60,
                   child: Material(
                     color: Colors.transparent,
@@ -1285,7 +1329,7 @@ class CommentsSection extends GetView<HomeController> {
                                                 child: Text(
                                                   entry.value,
                                                   style: const TextStyle(
-                                                    fontSize: 24,
+                                                    fontSize: 12,
                                                   ),
                                                 ),
                                               )
@@ -1326,17 +1370,9 @@ class CommentsSection extends GetView<HomeController> {
     final userReaction = comment.getUserReaction(currentUser.id ?? '');
 
     return Padding(
-      padding: const EdgeInsets.only(top: 8.0, left: 4),
+      padding: const EdgeInsets.only(top: 8.0),
       child: Row(
         children: [
-          Text(
-            _formatTime(comment.createdAt),
-            style: GoogleFonts.poppins(
-              color: AppColors.GREY_TEXT_COLOR,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(width: 24),
           Builder(
             builder: (buttonContext) {
               return InkWell(
@@ -1352,7 +1388,7 @@ class CommentsSection extends GetView<HomeController> {
                         ),
                       ),
                     Text(
-                      'React',
+                      userReaction != null ? 'Reacted' : 'React',
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.bold,
                         color: userReaction != null
@@ -1395,6 +1431,7 @@ class CommentsSection extends GetView<HomeController> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         gradient: LinearGradient(
+          begin: Alignment.topLeft,
           colors: [
             AppColors.PRIMARY_COLOR.withOpacity(0.8),
             AppColors.SECONDARY_COLOR.withOpacity(0.8),
@@ -1403,6 +1440,7 @@ class CommentsSection extends GetView<HomeController> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (sortedReactions.isNotEmpty)
             SizedBox(
@@ -1445,29 +1483,37 @@ class CommentsSection extends GetView<HomeController> {
           comment.replies.isEmpty &&
           !comment.areRepliesVisible.value) {
         return Padding(
-          padding: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.only(left: 10, top: 8),
           child: InkWell(
             onTap: () {
               comment.areRepliesVisible.value = true;
               controller.getRepliesForComment(meme.id!, comment);
             },
-            child: Row(
-              children: [
-                Container(
-                  width: 20,
-                  height: 1,
-                  color: AppColors.GREY_TEXT_COLOR.withOpacity(0.2),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  'View ${comment.replyCount} ${comment.replyCount > 1 ? "replies" : "reply"}',
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.PRIMARY_COLOR,
-                    fontSize: 13,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.PRIMARY_COLOR.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 20,
+                    height: 1,
+                    color: AppColors.PRIMARY_COLOR.withOpacity(0.5),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Text(
+                    'View ${comment.replyCount} ${comment.replyCount > 1 ? "replies" : "reply"}',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.PRIMARY_COLOR,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -1559,7 +1605,8 @@ class CommentsSection extends GetView<HomeController> {
                               ),
                             ),
                             TextSpan(
-                              text: '  ·  ${_formatTime(reply.createdAt)}',
+                              text:
+                                  '  ·  ${HelperMethods.formatTime(reply.createdAt)}',
                               style: TextStyle(
                                 color: AppColors.GREY_TEXT_COLOR,
                                 fontSize: 11,
@@ -1644,7 +1691,7 @@ class CommentsSection extends GetView<HomeController> {
                         ),
                       ),
                     Text(
-                      'React',
+                      userReaction != null ? 'Reacted' : 'React',
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.bold,
                         color: userReaction != null
@@ -1677,6 +1724,7 @@ class CommentsSection extends GetView<HomeController> {
     final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
     final offset = renderBox.localToGlobal(Offset.zero);
+    final screenWidth = MediaQuery.of(context).size.width;
 
     OverlayEntry? overlayEntry;
 
@@ -1689,7 +1737,10 @@ class CommentsSection extends GetView<HomeController> {
             child: Stack(
               children: [
                 Positioned(
-                  left: offset.dx,
+                  // Adjusted position to prevent overflow
+                  left: (offset.dx + 320 > screenWidth)
+                      ? screenWidth - 320
+                      : (offset.dx > 16 ? offset.dx : 16),
                   top: offset.dy - 60,
                   child: Material(
                     color: Colors.transparent,
@@ -1780,7 +1831,7 @@ class CommentsSection extends GetView<HomeController> {
                                                 child: Text(
                                                   entry.value,
                                                   style: const TextStyle(
-                                                    fontSize: 24,
+                                                    fontSize: 12,
                                                   ),
                                                 ),
                                               )
@@ -1826,6 +1877,7 @@ class CommentsSection extends GetView<HomeController> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         gradient: LinearGradient(
+          begin: Alignment.topLeft,
           colors: [
             AppColors.PRIMARY_COLOR.withOpacity(0.8),
             AppColors.SECONDARY_COLOR.withOpacity(0.8),
@@ -1847,7 +1899,7 @@ class CommentsSection extends GetView<HomeController> {
                     child: Text(
                       controller.reactionEmojis[sortedReactions[index].key] ??
                           '',
-                      style: const TextStyle(fontSize: 16),
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ),
                 ).reversed.toList(),
@@ -1865,21 +1917,5 @@ class CommentsSection extends GetView<HomeController> {
         ],
       ),
     );
-  }
-
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
-
-    if (difference.inMinutes < 1) return 'Just now';
-    if (difference.inHours < 1) return '${difference.inMinutes}m';
-    if (difference.inDays < 1) return '${difference.inHours}h';
-    return '${difference.inDays}d';
-  }
-
-  String _formatCount(int count) {
-    if (count < 1000) return count.toString();
-    if (count < 1000000) return '${(count / 1000).toStringAsFixed(1)}K';
-    return '${(count / 1000000).toStringAsFixed(1)}M';
   }
 }
