@@ -1,51 +1,51 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class ReplyModel {
-  String? id;
-  String? commentId;
-  String? userId;
-  String? userName;
+  String id;
+  String userId;
+  String userName;
   String? userAvatarUrl;
-  String? text;
-  DateTime? createdAt;
-  int? likeCount;
-  bool? isReactedByUser;
+  String text;
+  DateTime createdAt;
 
   ReplyModel({
-    this.id,
-    this.commentId,
-    this.userId,
-    this.userName,
+    required this.id,
+    required this.userId,
+    required this.userName,
     this.userAvatarUrl,
-    this.text,
-    this.createdAt,
-    this.likeCount = 0,
-    this.isReactedByUser = false,
+    required this.text,
+    required this.createdAt,
   });
 
-  factory ReplyModel.fromMap(Map<String, dynamic> map, String id) {
+  factory ReplyModel.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
     return ReplyModel(
-      id: id,
-      commentId: map['commentId'],
+      id: doc.id,
+      userId: data['userId'] ?? '',
+      userName: data['userName'] ?? 'Unknown',
+      userAvatarUrl: data['userAvatarUrl'],
+      text: data['text'] ?? '',
+      createdAt: (data['createdAt'] as Timestamp).toDate(),
+    );
+  }
+  factory ReplyModel.fromMap(Map<String, dynamic> map) {
+    return ReplyModel(
+      id: map['id'],
       userId: map['userId'],
       userName: map['userName'],
       userAvatarUrl: map['userAvatarUrl'],
       text: map['text'],
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString())
-          : null,
-      likeCount: map['likeCount'] ?? 0,
-      isReactedByUser: map['isReactedByUser'] ?? false,
+      createdAt: (map['createdAt'] as Timestamp).toDate(),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'commentId': commentId,
       'userId': userId,
       'userName': userName,
       'userAvatarUrl': userAvatarUrl,
       'text': text,
-      'createdAt': createdAt?.toIso8601String(),
-      'likeCount': likeCount,
+      'createdAt': Timestamp.fromDate(createdAt),
     };
   }
 }
