@@ -6,115 +6,90 @@ class MemeModel {
   String? id;
   String? title;
   String? imageUrl;
-  String? uploadedBy; // userId
+  String? uploaderId; // Renamed from uploadedBy for clarity
+  String? uploaderName; // Stored in Firestore for efficiency
+  String? uploaderAvatar; // Stored in Firestore for efficiency
   DateTime? createdAt;
-  int? likeCount;
   int? commentCount;
   int? shareCount;
   int? saveCount;
   int? views;
   List<String>? hashtags;
-  bool? isReactedByUser;
   bool? isTrending;
-  bool? isLikedByUser;
   bool? isSaved;
   bool? isRecommendedForYou;
-  List<CommentModel>? comments;
-
-  // User info (will be populated separately)
-  String? username;
-  String? userAvatar;
-  int? userFollowerCount;
+  Map<String, List<String>> reactions; // Reaction type -> List of user IDs
+  String? userReaction; // Current user's reaction
+  int totalReactionCount; // Total number of reactions
+  List<CommentModel>?
+  comments; // Optional, for cases where comments are pre-fetched
+  int? userFollowerCount; // Optional, populated via withUserData
 
   MemeModel({
     this.id,
     this.title,
     this.imageUrl,
-    this.uploadedBy,
+    this.uploaderId,
+    this.uploaderName,
+    this.uploaderAvatar,
     this.createdAt,
-    this.likeCount = 0,
     this.commentCount = 0,
     this.shareCount = 0,
     this.saveCount = 0,
     this.views = 0,
     this.hashtags,
-    this.isReactedByUser = false,
     this.isTrending = false,
-    this.isLikedByUser = false,
     this.isSaved = false,
     this.isRecommendedForYou = false,
+    this.reactions = const {},
+    this.userReaction,
+    this.totalReactionCount = 0,
     this.comments,
-    this.username,
-    this.userAvatar,
     this.userFollowerCount,
   });
 
-  factory MemeModel.fromMap(Map<String, dynamic> map, String id) {
-    return MemeModel(
-      id: id,
-      title: map['title'],
-      imageUrl: map['imageUrl'],
-      uploadedBy: map['uploadedBy'],
-      createdAt: map['createdAt'] != null
-          ? DateTime.tryParse(map['createdAt'].toString())
-          : null,
-      likeCount: map['likeCount'] ?? 0,
-      commentCount: map['commentCount'] ?? 0,
-      shareCount: map['shareCount'] ?? 0,
-      saveCount: map['saveCount'] ?? 0,
-      views: map['views'] ?? 0,
-      hashtags: List<String>.from(map['hashtags'] ?? []),
-      isTrending: map['isTrending'] ?? false,
-      isRecommendedForYou: map['isRecommendedForYou'] ?? false,
-      isReactedByUser: map['isReactedByUser'] ?? false,
-      isLikedByUser: map['isLikedByUser'] ?? false,
-      isSaved: map['isSaved'] ?? false,
+  factory MemeModel.fromMap(
+    Map<String, dynamic> map,
+    String id,
+    String currentUserId,
+  ) {
+    final reactionsData = map['reactions'] as Map<String, dynamic>? ?? {};
+    final reactions = reactionsData.map(
+      (key, value) => MapEntry(key, List<String>.from(value as List)),
     );
-  }
+    final totalReactionCount = reactions.values.fold(
+      0,
+      (sum, list) => sum + list.length,
+    );
+    String? userReaction;
+    reactions.forEach((key, value) {
+      if (value.contains(currentUserId)) userReaction = key;
+    });
 
-  Map<String, dynamic> toMap() {
-    return {
-      'title': title,
-      'imageUrl': imageUrl,
-      'uploadedBy': uploadedBy,
-      'createdAt': createdAt?.toIso8601String(),
-      'likeCount': likeCount,
-      'commentCount': commentCount,
-      'shareCount': shareCount,
-      'saveCount': saveCount,
-      'views': views,
-      'hashtags': hashtags ?? [],
-      'isTrending': isTrending,
-      'isRecommendedForYou': isRecommendedForYou,
-      'isReactedByUser': isReactedByUser,
-      'isLikedByUser': isLikedByUser,
-      'isSaved': isSaved,
-    };
-  }
-
-  // Helper method to populate user data
-  MemeModel withUserData(UserModel user) {
     return MemeModel(
       id: id,
-      title: title,
-      imageUrl: imageUrl,
-      uploadedBy: uploadedBy,
-      createdAt: createdAt,
-      likeCount: likeCount,
-      commentCount: commentCount,
-      shareCount: shareCount,
-      saveCount: saveCount,
-      views: views,
-      hashtags: hashtags,
-      isReactedByUser: isReactedByUser,
-      isTrending: isTrending,
-      isLikedByUser: isLikedByUser,
-      isSaved: isSaved,
-      isRecommendedForYou: isRecommendedForYou,
-      comments: comments,
-      username: user.name,
-      userAvatar: user.photoUrl,
-      userFollowerCount: user.followerCount,
+      title: map['title'] as String?,
+      imageUrl: map['imageUrl'] as String?,
+      uploaderId: map['uploaderId'] as String?,
+      uploaderName: map['uploaderName'] as String? ?? 'Anonymous Memer',
+      uploaderAvatar: map['uploaderAvatar'] as String?,
+      createdAt: map['createdAt'] != null
+          ? (map['createdAt'] is Timestamp
+                ? (map['createdAt'] as Timestamp).toDate()
+                : DateTime.tryParse(map['createdAt'].toString()))
+          : null,
+      commentCount: map['commentCount'] as int? ?? 0,
+      shareCount: map['shareCount'] as int? ?? 0,
+      saveCount: map['saveCount'] as int? ?? 0,
+      views: map['views'] as int? ?? 0,
+      hashtags: List<String>.from(map['hashtags'] ?? []),
+      isTrending: map['isTrending'] as bool? ?? false,
+      isSaved: map['isSaved'] as bool? ?? false,
+      isRecommendedForYou: map['isRecommendedForYou'] as bool? ?? false,
+      reactions: reactions,
+      userReaction: userReaction,
+      totalReactionCount: totalReactionCount,
+      userFollowerCount: map['userFollowerCount'] as int?,
     );
   }
 
@@ -124,23 +99,103 @@ class MemeModel {
     Set<String> savedMemeIds,
   ) {
     final data = doc.data() as Map<String, dynamic>;
-    final List<dynamic> likedBy = data['likedBy'] ?? [];
+    final reactionsData = data['reactions'] as Map<String, dynamic>? ?? {};
+    final reactions = reactionsData.map(
+      (key, value) => MapEntry(key, List<String>.from(value as List)),
+    );
+    final totalReactionCount = reactions.values.fold(
+      0,
+      (sum, list) => sum + list.length,
+    );
+    String? userReaction;
+    reactions.forEach((key, value) {
+      if (value.contains(currentUserId)) userReaction = key;
+    });
 
     return MemeModel(
       id: doc.id,
-      imageUrl: data['imageUrl'],
-      title: data['title'],
-      uploadedBy: data['uploaderId'],
-      likeCount: data['likeCount'] ?? 0,
-      commentCount: data['commentCount'] ?? 0,
-      shareCount: data['shareCount'] ?? 0,
-      saveCount: data['saveCount'] ?? 0,
-      username: data['uploaderName'],
-      userAvatar: data['uploaderAvatar'],
+      title: data['title'] as String?,
+      imageUrl: data['imageUrl'] as String?,
+      uploaderId: data['uploaderId'] as String?,
+      uploaderName: data['uploaderName'] as String? ?? 'Anonymous Memer',
+      uploaderAvatar: data['uploaderAvatar'] as String?,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-      isLikedByUser: likedBy.contains(currentUserId),
+      commentCount: data['commentCount'] as int? ?? 0,
+      shareCount: data['shareCount'] as int? ?? 0,
+      saveCount: data['saveCount'] as int? ?? 0,
+      views: data['views'] as int? ?? 0,
+      hashtags: List<String>.from(data['hashtags'] ?? []),
+      isTrending: data['isTrending'] as bool? ?? false,
       isSaved: savedMemeIds.contains(doc.id),
-      isTrending: data['isTrending'] ?? false,
+      isRecommendedForYou: data['isRecommendedForYou'] as bool? ?? false,
+      reactions: reactions,
+      userReaction: userReaction,
+      totalReactionCount: totalReactionCount,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'imageUrl': imageUrl,
+      'uploaderId': uploaderId,
+      'uploaderName': uploaderName,
+      'uploaderAvatar': uploaderAvatar,
+      'createdAt': createdAt?.toIso8601String(),
+      'commentCount': commentCount,
+      'shareCount': shareCount,
+      'saveCount': saveCount,
+      'views': views,
+      'hashtags': hashtags ?? [],
+      'isTrending': isTrending,
+      'isRecommendedForYou': isRecommendedForYou,
+      'reactions': reactions,
+    };
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'title': title,
+      'imageUrl': imageUrl,
+      'uploaderId': uploaderId,
+      'uploaderName': uploaderName,
+      'uploaderAvatar': uploaderAvatar,
+      'createdAt': createdAt != null
+          ? Timestamp.fromDate(createdAt!)
+          : FieldValue.serverTimestamp(),
+      'commentCount': commentCount,
+      'shareCount': shareCount,
+      'saveCount': saveCount,
+      'views': views,
+      'hashtags': hashtags ?? [],
+      'isTrending': isTrending,
+      'isRecommendedForYou': isRecommendedForYou,
+      'reactions': reactions,
+    };
+  }
+
+  MemeModel withUserData(UserModel user) {
+    return MemeModel(
+      id: id,
+      title: title,
+      imageUrl: imageUrl,
+      uploaderId: uploaderId,
+      uploaderName: user.name,
+      uploaderAvatar: user.photoUrl,
+      createdAt: createdAt,
+      commentCount: commentCount,
+      shareCount: shareCount,
+      saveCount: saveCount,
+      views: views,
+      hashtags: hashtags,
+      isTrending: isTrending,
+      isSaved: isSaved,
+      isRecommendedForYou: isRecommendedForYou,
+      reactions: reactions,
+      userReaction: userReaction,
+      totalReactionCount: totalReactionCount,
+      comments: comments,
+      userFollowerCount: user.followerCount,
     );
   }
 }

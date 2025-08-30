@@ -12,14 +12,11 @@ class CommentModel {
   DateTime createdAt;
   Map<String, List<String>> reactions;
   int replyCount;
-
-  // --- UI State (not stored in Firestore) ---
-  // This property will hold the current user's reaction to the comment.
-  // It is populated at read-time and not saved back to Firestore.
-  String? userReaction;
-  final RxList<ReplyModel> replies = <ReplyModel>[].obs;
-  final RxBool areRepliesLoading = false.obs;
-  final RxBool areRepliesVisible = false.obs;
+  String? userReaction; // Current user's reaction
+  int totalReactionCount; // Total number of reactions
+  final RxList<ReplyModel> replies;
+  final RxBool areRepliesLoading;
+  final RxBool areRepliesVisible;
 
   CommentModel({
     required this.id,
@@ -29,10 +26,17 @@ class CommentModel {
     required this.userName,
     this.userAvatarUrl,
     required this.createdAt,
-    this.reactions = const {},
+    Map<String, List<String>>? reactions,
     this.replyCount = 0,
     this.userReaction,
-  });
+    this.totalReactionCount = 0,
+    List<ReplyModel>? replies,
+    bool areRepliesLoading = false,
+    bool areRepliesVisible = false,
+  }) : reactions = reactions ?? {},
+       replies = RxList<ReplyModel>(replies ?? []),
+       areRepliesLoading = RxBool(areRepliesLoading),
+       areRepliesVisible = RxBool(areRepliesVisible);
 
   factory CommentModel.fromMap(
     Map<String, dynamic> data,
@@ -41,29 +45,33 @@ class CommentModel {
   ) {
     final reactionsData = data['reactions'] as Map<String, dynamic>? ?? {};
     final reactions = reactionsData.map(
-      (key, value) => MapEntry(key, List<String>.from(value as List)),
+      (key, value) => MapEntry(key, List<String>.from(value as List? ?? [])),
     );
-
-    // Determine the current user's reaction based on the provided userId.
+    final totalReactionCount = reactions.values.fold(
+      0,
+      (sum, list) => sum + list.length,
+    );
     String? userReaction;
-    for (var entry in reactions.entries) {
-      if (entry.value.contains(currentUserId)) {
-        userReaction = entry.key;
-        break;
-      }
-    }
+    reactions.forEach((key, value) {
+      if (value.contains(currentUserId)) userReaction = key;
+    });
 
     return CommentModel(
       id: id,
-      memeId: data['memeId'] ?? '',
-      text: data['text'] ?? '',
-      userId: data['userId'] ?? '',
-      userName: data['userName'] ?? 'Unknown',
-      userAvatarUrl: data['userAvatarUrl'],
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
+      memeId: data['memeId'] as String? ?? '',
+      text: data['text'] as String? ?? '',
+      userId: data['userId'] as String? ?? '',
+      userName: data['userName'] as String? ?? 'Unknown',
+      userAvatarUrl: data['userAvatarUrl'] as String?,
+      createdAt: data['createdAt'] is Timestamp
+          ? (data['createdAt'] as Timestamp).toDate()
+          : DateTime.parse(
+              data['createdAt'] as String? ?? DateTime.now().toIso8601String(),
+            ),
       reactions: reactions,
-      replyCount: data['replyCount'] ?? 0,
+      replyCount: data['replyCount'] as int? ?? 0,
       userReaction: userReaction,
+      totalReactionCount: totalReactionCount,
     );
   }
 
@@ -83,21 +91,14 @@ class CommentModel {
       'userName': userName,
       'userAvatarUrl': userAvatarUrl,
       'createdAt': Timestamp.fromDate(createdAt),
-      'replyCount': replyCount,
       'reactions': reactions,
+      'replyCount': replyCount,
     };
-  }
-
-  int get totalReactionCount {
-    if (reactions.isEmpty) return 0;
-    return reactions.values.fold(0, (sum, list) => sum + list.length);
   }
 
   String? getUserReaction(String userId) {
     for (var entry in reactions.entries) {
-      if (entry.value.contains(userId)) {
-        return entry.key;
-      }
+      if (entry.value.contains(userId)) return entry.key;
     }
     return null;
   }

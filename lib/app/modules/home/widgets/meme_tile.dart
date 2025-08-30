@@ -24,7 +24,7 @@ class MemeTile extends StatelessWidget {
               children: [
                 Icon(Icons.favorite_border),
                 const SizedBox(width: 4),
-                Text('${meme.likeCount}'),
+                Text('${meme.totalReactionCount} likes'),
                 const Spacer(),
                 Icon(Icons.comment),
                 const SizedBox(width: 4),

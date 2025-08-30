@@ -3,37 +3,52 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Memes Collection
-    match /memes/{memeId} {
-      // Anyone can read memes.
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      // Anyone can read user profiles (e.g., for names, avatars)
       allow read: if true;
-
-      // Anyone can create (upload) a meme.
-      // This fulfills your requirement for unauthenticated uploads.
-      allow create: if true;
-
-      // IMPORTANT: This prevents anyone from updating or deleting memes,
-      // protecting your data. You can make this more specific later if needed.
-      allow update, delete: if false;
-
-      // Comments Subcollection
-      match /comments/{commentId} {
-        // Anyone can read comments.
-        allow read: if true;
-
-        // Only authenticated users can create comments.
-        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-
-        // Only the user who wrote the comment can update or delete it.
-        allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
-      }
+      // Only the authenticated user can write to their own document
+      allow write: if request.auth.uid == userId;
     }
 
-    // Users Collection
-    match /users/{userId} {
-      // A user can only read, create, or update their own document.
-      // This is useful for managing things like a list of saved memes.
-      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+    // Rules for the 'memes' collection
+    match /memes/{memeId} {
+      // Anyone can read memes
+      allow read: if true;
+
+      // Only authenticated users can create memes
+      allow create: if request.auth != null && request.resource.data.uploaderId == request.auth.uid;
+
+      // Authenticated users can update specific fields (reactions, counts)
+      allow update: if request.auth != null &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'saveCount', 'shareCount', 'commentCount']);
+
+      // Rules for the 'comments' subcollection
+      match /comments/{commentId} {
+        // Anyone can read comments
+        allow read: if true;
+
+        // Only authenticated users can create comments
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+
+        // Authenticated users can update specific fields (reactions, replyCount)
+        allow update: if request.auth != null &&
+                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'replyCount']);
+
+        // Rules for the 'replies' subcollection
+        match /replies/{replyId} {
+          // Anyone can read replies
+          allow read: if true;
+
+          // Only authenticated users can create replies
+          // Ensure the user ID in the reply matches the authenticated user
+          allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+
+          // Authenticated users can update reactions on replies
+          allow update: if request.auth != null &&
+                           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions']);
+        }
+      }
     }
   }
 }

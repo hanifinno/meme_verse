@@ -367,10 +367,10 @@ class FeedPage extends GetView<HomeController> {
           CircleAvatar(
             radius: 18,
             backgroundColor: AppColors.PRIMARY_COLOR.withOpacity(0.2),
-            backgroundImage: meme.userAvatar != null
-                ? NetworkImage(meme.userAvatar ?? '')
+            backgroundImage: meme.uploaderAvatar != null
+                ? NetworkImage(meme.uploaderAvatar ?? '')
                 : null,
-            child: meme.userAvatar == null
+            child: meme.uploaderAvatar == null
                 ? Image.asset(AppAssets.APP_USER_PROFILE)
                 : null,
           ),
@@ -380,7 +380,7 @@ class FeedPage extends GetView<HomeController> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  meme.username ?? 'Anonymous Memer',
+                  meme.uploaderName ?? 'Anonymous Memer',
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -507,24 +507,39 @@ class FeedPage extends GetView<HomeController> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildInteractionButton(
-            Iconsax.heart,
-            meme.likeCount ?? 0,
-            meme.isLikedByUser ?? false,
-            AppColors.SECONDARY_COLOR,
-            () {
-              controller.toggleLike(meme.id!);
+          Builder(
+            builder: (buttonContext) {
+              Widget iconWidget = Icon(
+                Iconsax.heart,
+                size: 22,
+                color: meme.userReaction != null
+                    ? AppColors.SECONDARY_COLOR
+                    : AppColors.GREY_TEXT_COLOR,
+              );
+              if (meme.userReaction != null) {
+                iconWidget = Text(
+                  controller.reactionEmojis[meme.userReaction] ?? '❤️',
+                  style: const TextStyle(fontSize: 22),
+                );
+              }
+              return _buildInteractionButton(
+                iconWidget,
+                meme.totalReactionCount,
+                meme.userReaction != null,
+                AppColors.SECONDARY_COLOR,
+                () => _showMemeReactionOverlay(buttonContext, meme),
+              );
             },
           ),
           _buildInteractionButton(
-            Iconsax.message,
+            Icon(Iconsax.message, size: 22),
             meme.commentCount ?? 0,
             false,
             AppColors.WARNING_COLOR,
             () => _showCommentsBottomSheet(context, meme),
           ),
           _buildInteractionButton(
-            Iconsax.share,
+            Icon(Iconsax.share, size: 22),
             meme.shareCount ?? 0,
             false,
             AppColors.GREEN_COLOR,
@@ -533,7 +548,7 @@ class FeedPage extends GetView<HomeController> {
             },
           ),
           _buildInteractionButton(
-            Iconsax.bookmark,
+            Icon(Iconsax.bookmark, size: 22),
             meme.saveCount ?? 0,
             meme.isSaved ?? false,
             AppColors.PRIMARY_COLOR,
@@ -547,7 +562,7 @@ class FeedPage extends GetView<HomeController> {
   }
 
   Widget _buildInteractionButton(
-    IconData icon,
+    Widget iconWidget,
     int count,
     bool isActive,
     Color activeColor,
@@ -560,11 +575,7 @@ class FeedPage extends GetView<HomeController> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
-            Icon(
-              icon,
-              size: 22,
-              color: isActive ? activeColor : AppColors.GREY_TEXT_COLOR,
-            ),
+            iconWidget,
             const SizedBox(width: 6),
             Text(
               _formatCount(count),
@@ -597,7 +608,7 @@ class FeedPage extends GetView<HomeController> {
                   ),
                   children: [
                     TextSpan(
-                      text: '${meme.username ?? 'User'} ',
+                      text: '${meme.uploaderName ?? 'User'} ',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     TextSpan(
@@ -677,306 +688,8 @@ class FeedPage extends GetView<HomeController> {
       },
     );
   }
-}
 
-class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
-  _SliverAppBarDelegate(this._tabBar);
-
-  final TabBar _tabBar;
-
-  @override
-  double get minExtent => _tabBar.preferredSize.height;
-  @override
-  double get maxExtent => _tabBar.preferredSize.height;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(color: AppColors.BLACK_COLOR, child: _tabBar);
-  }
-
-  @override
-  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
-    return false;
-  }
-}
-
-class CommentsSection extends GetView<HomeController> {
-  final MemeModel meme;
-  final ScrollController scrollController;
-  final textController = TextEditingController();
-
-  CommentsSection({
-    super.key,
-    required this.meme,
-    required this.scrollController,
-  });
-
-  void _postComment() {
-    if (textController.text.trim().isEmpty) return;
-    controller.postComment(meme.id!, textController.text);
-    textController.clear();
-    Get.focusScope?.unfocus();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This Padding moves the content up when the keyboard appears
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Column(
-        children: [
-          // Handle for the bottom sheet
-          Container(
-            width: 40,
-            height: 5,
-            margin: const EdgeInsets.symmetric(vertical: 10),
-            decoration: BoxDecoration(
-              color: AppColors.GREY_TEXT_COLOR.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text(
-              'Comments (${_formatCount(meme.commentCount ?? 0)})',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: AppColors.WHITE_COLOR,
-              ),
-            ),
-          ),
-          const Divider(height: 20, color: AppColors.GREY_TEXT_COLOR),
-          Expanded(
-            child: Obx(() {
-              if (controller.isCommentsLoading.value) {
-                return Center(child: CustomWidgets.customLottieLoader());
-              }
-              if (controller.currentMemeComments.isEmpty) {
-                return _buildEmptyState();
-              }
-              return ListView.separated(
-                controller: scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: controller.currentMemeComments.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(height: 16),
-                itemBuilder: (itemContext, index) {
-                  final comment = controller.currentMemeComments[index];
-                  return _buildCommentTile(itemContext, comment)
-                      .animate()
-                      .fadeIn(duration: 300.ms, delay: (50 * index).ms)
-                      .slideX(begin: -0.1, curve: Curves.easeOut);
-                },
-              );
-            }),
-          ),
-          _buildCommentInputField(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Iconsax.message_notif,
-            color: AppColors.GREY_TEXT_COLOR,
-            size: 50,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No comments yet',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              color: AppColors.GREY_TEXT_COLOR,
-            ),
-          ),
-          Text(
-            'Be the first to share your thoughts!',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: AppColors.GREY_TEXT_COLOR.withOpacity(0.7),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommentTile(BuildContext context, CommentModel comment) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CircleAvatar(
-          radius: 18,
-          backgroundColor: AppColors.PRIMARY_COLOR.withOpacity(0.2),
-          backgroundImage:
-              comment.userAvatarUrl != null && comment.userAvatarUrl!.isNotEmpty
-              ? CachedNetworkImageProvider(comment.userAvatarUrl!)
-              : null,
-          child: comment.userAvatarUrl == null || comment.userAvatarUrl!.isEmpty
-              ? Image.asset(AppAssets.APP_USER_PROFILE)
-              : null,
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.BLACK_COLOR,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Stack(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          comment.userName,
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.WHITE_COLOR,
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          comment.text,
-                          style: GoogleFonts.poppins(
-                            color: AppColors.WHITE_COLOR.withOpacity(0.9),
-                            fontSize: 14,
-                          ),
-                        ),
-                        if (comment.totalReactionCount > 0)
-                          const SizedBox(height: 20),
-                      ],
-                    ),
-                    if (comment.totalReactionCount > 0)
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: _buildReactionSummary(comment),
-                      ),
-                  ],
-                ),
-              ),
-              _buildCommentActions(context, comment),
-              _buildRepliesSection(comment),
-            ],
-          ).animate().fade(duration: 200.ms),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCommentInputField() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      decoration: BoxDecoration(
-        color: AppColors.GRAY_WHITE_COLOR,
-        border: Border(
-          top: BorderSide(
-            color: AppColors.GREY_TEXT_COLOR.withOpacity(0.5),
-            width: 1,
-          ),
-        ),
-      ),
-      // Use Obx to rebuild when the reply state changes
-      child: Obx(() {
-        final isReplying = controller.replyingToCommentId.value != null;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Show a "Replying to..." indicator
-            if (isReplying)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Row(
-                  children: [
-                    Text(
-                      'Replying to ${controller.replyingToUsername.value ?? ''}',
-                      style: GoogleFonts.poppins(
-                        color: AppColors.GREY_TEXT_COLOR,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const Spacer(),
-                    InkWell(
-                      onTap: () {
-                        controller.replyingToCommentId.value = null;
-                        controller.replyingToUsername.value = null;
-                      },
-                      child: const Icon(
-                        Icons.close,
-                        size: 16,
-                        color: AppColors.GREY_TEXT_COLOR,
-                      ),
-                    ),
-                  ],
-                ),
-              ).animate().fadeIn(duration: 200.ms).slideY(begin: 0.5),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: textController,
-                    minLines: 1,
-                    maxLines: 4,
-                    style: const TextStyle(color: AppColors.WHITE_COLOR),
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: isReplying
-                          ? 'Write a reply...'
-                          : 'Add a comment...',
-                      hintStyle: const TextStyle(
-                        color: AppColors.GREY_TEXT_COLOR,
-                      ),
-                      filled: true,
-                      fillColor: AppColors.BLACK_COLOR,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(
-                    Iconsax.send_1,
-                    color: AppColors.PRIMARY_COLOR,
-                  ),
-                  onPressed: _postComment,
-                ),
-              ],
-            ),
-          ],
-        );
-      }),
-    );
-  }
-
-  void _showReactionOverlay(BuildContext context, CommentModel comment) {
+  void _showMemeReactionOverlay(BuildContext context, MemeModel meme) {
     final overlay = Overlay.of(context);
     final renderBox = context.findRenderObject() as RenderBox;
     final offset = renderBox.localToGlobal(Offset.zero);
@@ -1022,9 +735,8 @@ class CommentsSection extends GetView<HomeController> {
                                         .indexOf(entry.key);
                                     return GestureDetector(
                                       onTap: () {
-                                        controller.toggleCommentReaction(
+                                        controller.toggleMemeReaction(
                                           meme.id!,
-                                          comment.id,
                                           entry.key,
                                         );
                                         overlayEntry?.remove();
@@ -1075,6 +787,538 @@ class CommentsSection extends GetView<HomeController> {
 
     overlay.insert(overlayEntry);
   }
+}
+
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  _SliverAppBarDelegate(this._tabBar);
+
+  final TabBar _tabBar;
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(color: AppColors.BLACK_COLOR, child: _tabBar);
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
+  }
+}
+
+class CommentsSection extends GetView<HomeController> {
+  final MemeModel meme;
+  final ScrollController scrollController;
+  final textController = TextEditingController();
+
+  CommentsSection({
+    super.key,
+    required this.meme,
+    required this.scrollController,
+  });
+
+  void _postComment() {
+    if (textController.text.trim().isEmpty) return;
+    if (controller.replyingToCommentId.value != null) {
+      controller.postReply(
+        meme.id!,
+        controller.replyingToCommentId.value!,
+        textController.text,
+      );
+      controller.replyingToCommentId.value = null;
+      controller.replyingToUsername.value = null;
+    } else {
+      controller.postComment(meme.id!, textController.text);
+    }
+    textController.clear();
+    Get.focusScope?.unfocus();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // This Padding moves the content up when the keyboard appears
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        children: [
+          // Handle for the bottom sheet with gradient
+          Container(
+            width: 50,
+            height: 6,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.PRIMARY_COLOR, AppColors.SECONDARY_COLOR],
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              'Comments (${_formatCount(meme.commentCount ?? 0)})',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                foreground: Paint()
+                  ..shader = LinearGradient(
+                    colors: [
+                      AppColors.PRIMARY_COLOR,
+                      AppColors.SECONDARY_COLOR,
+                    ],
+                  ).createShader(const Rect.fromLTWH(0, 0, 200, 70)),
+              ),
+            ),
+          ),
+          const Divider(
+            height: 24,
+            color: AppColors.PRIMARY_COLOR,
+            thickness: 1.5,
+          ),
+          Expanded(
+            child: Obx(() {
+              if (controller.isCommentsLoading.value) {
+                return Center(child: CustomWidgets.customLottieLoader());
+              }
+              if (controller.currentMemeComments.isEmpty) {
+                return _buildEmptyState();
+              }
+              return ListView.separated(
+                controller: scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: controller.currentMemeComments.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 16),
+                itemBuilder: (itemContext, index) {
+                  final comment = controller.currentMemeComments[index];
+                  return _buildCommentTile(itemContext, comment)
+                      .animate()
+                      .fadeIn(duration: 300.ms, delay: (50 * index).ms)
+                      .slideX(begin: -0.1, curve: Curves.easeOut);
+                },
+              );
+            }),
+          ),
+          _buildCommentInputField(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Iconsax.message_notif,
+            color: AppColors.PRIMARY_COLOR,
+            size: 60,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No comments yet',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.WHITE_COLOR,
+            ),
+          ),
+          Text(
+            'Be the first to share your thoughts!',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: AppColors.GREY_TEXT_COLOR,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentTile(BuildContext context, CommentModel comment) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Avatar and thread line
+          SizedBox(
+            width: 40, // A bit more space
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                // The vertical line for the thread
+                if (comment.replies.isNotEmpty || comment.replyCount > 0)
+                  Positioned.fill(
+                    child: Align(
+                      alignment: Alignment.center,
+                      child: Container(
+                        margin: const EdgeInsets.only(top: 40),
+                        width: 2,
+                        color: AppColors.GREY_TEXT_COLOR.withOpacity(0.2),
+                      ),
+                    ),
+                  ),
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: AppColors.PRIMARY_COLOR,
+                  child: CircleAvatar(
+                    radius: 19,
+                    backgroundColor: AppColors.PRIMARY_COLOR.withOpacity(0.2),
+                    backgroundImage:
+                        comment.userAvatarUrl != null &&
+                            comment.userAvatarUrl!.isNotEmpty
+                        ? CachedNetworkImageProvider(comment.userAvatarUrl!)
+                        : null,
+                    child:
+                        comment.userAvatarUrl == null ||
+                            comment.userAvatarUrl!.isEmpty
+                        ? Image.asset(AppAssets.APP_USER_PROFILE)
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // The comment bubble
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.BLACK_COLOR,
+                        AppColors.GRAY_WHITE_COLOR.withOpacity(0.8),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.PRIMARY_COLOR.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Stack(
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            comment.userName,
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.PRIMARY_COLOR,
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            comment.text,
+                            style: GoogleFonts.poppins(
+                              color: AppColors.WHITE_COLOR,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (comment.totalReactionCount > 0)
+                            const SizedBox(
+                              height: 24,
+                            ), // Space for the reaction summary
+                        ],
+                      ),
+                      if (comment.totalReactionCount > 0)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: _buildReactionSummary(comment),
+                        ),
+                    ],
+                  ),
+                ),
+                _buildCommentActions(context, comment),
+                _buildRepliesSection(context, meme, comment),
+              ],
+            ).animate().fade(duration: 200.ms),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentInputField() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.GRAY_WHITE_COLOR,
+        border: Border(
+          top: BorderSide(
+            color: AppColors.PRIMARY_COLOR.withOpacity(0.5),
+            width: 1.5,
+          ),
+        ),
+      ),
+      child: Obx(() {
+        final isReplying = controller.replyingToCommentId.value != null;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isReplying)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.BLACK_COLOR,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Replying to ${controller.replyingToUsername.value ?? ''}',
+                        style: GoogleFonts.poppins(
+                          color: AppColors.PRIMARY_COLOR,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const Spacer(),
+                      InkWell(
+                        onTap: () {
+                          controller.replyingToCommentId.value = null;
+                          controller.replyingToUsername.value = null;
+                        },
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: AppColors.PRIMARY_COLOR,
+                        ),
+                      ),
+                    ],
+                  ),
+                ).animate().fadeIn(duration: 200.ms).slideY(begin: 0.5),
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: textController,
+                    minLines: 1,
+                    maxLines: 4,
+                    style: const TextStyle(color: AppColors.WHITE_COLOR),
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: isReplying
+                          ? 'Write a reply...'
+                          : 'Add a comment...',
+                      hintStyle: const TextStyle(
+                        color: AppColors.GREY_TEXT_COLOR,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.BLACK_COLOR,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      suffixIcon: IconButton(
+                        icon: const Icon(
+                          Iconsax.emoji_happy,
+                          color: AppColors.PRIMARY_COLOR,
+                        ),
+                        onPressed: () {
+                          // Optional: Integrate emoji picker here
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(
+                    Iconsax.send_1,
+                    color: AppColors.PRIMARY_COLOR,
+                    size: 28,
+                  ),
+                  onPressed: _postComment,
+                ),
+              ],
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  void _showReactionOverlay(BuildContext context, CommentModel comment) {
+    final currentUser = controller.loginCredential.getUserData();
+    if (currentUser == null) return;
+    final userReaction = comment.getUserReaction(currentUser.id ?? '');
+
+    final overlay = Overlay.of(context);
+    final renderBox = context.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    OverlayEntry? overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned.fill(
+        child: GestureDetector(
+          onTap: () => overlayEntry?.remove(),
+          child: Container(
+            color: Colors.transparent,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: offset.dx,
+                  top: offset.dy - 60,
+                  child: Material(
+                    color: Colors.transparent,
+                    child:
+                        Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.BLACK_COLOR,
+                                borderRadius: BorderRadius.circular(40),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.PRIMARY_COLOR.withOpacity(
+                                      0.2,
+                                    ),
+                                    blurRadius: 12,
+                                    spreadRadius: 3,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Undo button
+                                  GestureDetector(
+                                    onTap: () {
+                                      if (userReaction != null) {
+                                        controller.toggleCommentReaction(
+                                          meme.id!,
+                                          comment.id,
+                                          userReaction,
+                                        );
+                                      }
+                                      overlayEntry?.remove();
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: 200.ms,
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: userReaction == null
+                                            ? AppColors.PRIMARY_COLOR
+                                                  .withOpacity(0.2)
+                                            : Colors.transparent,
+                                      ),
+                                      child: Icon(
+                                        Icons.not_interested,
+                                        color: AppColors.GREY_TEXT_COLOR,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ...controller.reactionEmojis.entries.map((
+                                    entry,
+                                  ) {
+                                    final isSelected =
+                                        userReaction == entry.key;
+                                    return GestureDetector(
+                                      onTap: () {
+                                        controller.toggleCommentReaction(
+                                          meme.id!,
+                                          comment.id,
+                                          entry.key,
+                                        );
+                                        overlayEntry?.remove();
+                                      },
+                                      child:
+                                          AnimatedContainer(
+                                                duration: 200.ms,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                    ),
+                                                padding: const EdgeInsets.all(
+                                                  6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: isSelected
+                                                      ? AppColors.PRIMARY_COLOR
+                                                            .withOpacity(0.2)
+                                                      : Colors.transparent,
+                                                ),
+                                                child: Text(
+                                                  entry.value,
+                                                  style: const TextStyle(
+                                                    fontSize: 24,
+                                                  ),
+                                                ),
+                                              )
+                                              .animate(
+                                                target: isSelected ? 1 : 0,
+                                              )
+                                              .scale(
+                                                begin: const Offset(1, 1),
+                                                end: const Offset(1.2, 1.2),
+                                                curve: Curves.elasticOut,
+                                              ),
+                                    );
+                                  }).toList(),
+                                ],
+                              ),
+                            )
+                            .animate()
+                            .fadeIn(duration: 250.ms)
+                            .scale(
+                              begin: const Offset(0.7, 0.7),
+                              curve: Curves.easeOutBack,
+                            ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+  }
 
   Widget _buildCommentActions(BuildContext context, CommentModel comment) {
     final currentUser = controller.loginCredential.getUserData();
@@ -1082,7 +1326,7 @@ class CommentsSection extends GetView<HomeController> {
     final userReaction = comment.getUserReaction(currentUser.id ?? '');
 
     return Padding(
-      padding: const EdgeInsets.only(top: 4.0),
+      padding: const EdgeInsets.only(top: 8.0, left: 4),
       child: Row(
         children: [
           Text(
@@ -1092,25 +1336,37 @@ class CommentsSection extends GetView<HomeController> {
               fontSize: 12,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 24),
           Builder(
             builder: (buttonContext) {
               return InkWell(
                 onTap: () => _showReactionOverlay(buttonContext, comment),
-                child: Text(
-                  userReaction != null ? 'Reacted' : 'React',
-                  style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w600,
-                    color: userReaction != null
-                        ? AppColors.PRIMARY_COLOR
-                        : AppColors.GREY_TEXT_COLOR,
-                    fontSize: 12,
-                  ),
+                child: Row(
+                  children: [
+                    if (userReaction != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4.0),
+                        child: Text(
+                          controller.reactionEmojis[userReaction] ?? '',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    Text(
+                      'React',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
+                        color: userReaction != null
+                            ? AppColors.PRIMARY_COLOR
+                            : AppColors.GREY_TEXT_COLOR,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
               );
             },
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 24),
           InkWell(
             onTap: () {
               controller.replyingToCommentId.value = comment.id;
@@ -1119,9 +1375,9 @@ class CommentsSection extends GetView<HomeController> {
             child: Text(
               'Reply',
               style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.bold,
                 color: AppColors.GREY_TEXT_COLOR,
-                fontSize: 12,
+                fontSize: 13,
               ),
             ),
           ),
@@ -1136,37 +1392,42 @@ class CommentsSection extends GetView<HomeController> {
       ..sort((a, b) => b.value.length.compareTo(a.value.length));
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.GRAY_WHITE_COLOR.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.PRIMARY_COLOR.withOpacity(0.8),
+            AppColors.SECONDARY_COLOR.withOpacity(0.8),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           if (sortedReactions.isNotEmpty)
             SizedBox(
-              height: 18,
+              height: 20,
               child: Stack(
                 children: List.generate(
                   sortedReactions.take(3).length,
                   (index) => Padding(
-                    padding: EdgeInsets.only(left: (index * 10).toDouble()),
+                    padding: EdgeInsets.only(left: (index * 12).toDouble()),
                     child: Text(
                       controller.reactionEmojis[sortedReactions[index].key] ??
                           '',
-                      style: const TextStyle(fontSize: 14),
+                      style: const TextStyle(fontSize: 16),
                     ),
                   ),
                 ).reversed.toList(),
               ),
             ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 6),
           Text(
             comment.totalReactionCount.toString(),
             style: GoogleFonts.poppins(
               color: AppColors.WHITE_COLOR,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -1174,25 +1435,39 @@ class CommentsSection extends GetView<HomeController> {
     );
   }
 
-  Widget _buildRepliesSection(CommentModel comment) {
+  Widget _buildRepliesSection(
+    BuildContext context,
+    MemeModel meme,
+    CommentModel comment,
+  ) {
     return Obx(() {
       if (comment.replyCount > 0 &&
           comment.replies.isEmpty &&
           !comment.areRepliesVisible.value) {
         return Padding(
-          padding: const EdgeInsets.only(left: 50.0, top: 8),
+          padding: const EdgeInsets.only(top: 8),
           child: InkWell(
             onTap: () {
               comment.areRepliesVisible.value = true;
               controller.getRepliesForComment(meme.id!, comment);
             },
-            child: Text(
-              'View ${comment.replyCount} ${comment.replyCount > 1 ? "replies" : "reply"}',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                color: AppColors.GREY_TEXT_COLOR,
-                fontSize: 12,
-              ),
+            child: Row(
+              children: [
+                Container(
+                  width: 20,
+                  height: 1,
+                  color: AppColors.GREY_TEXT_COLOR.withOpacity(0.2),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'View ${comment.replyCount} ${comment.replyCount > 1 ? "replies" : "reply"}',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.PRIMARY_COLOR,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -1200,27 +1475,47 @@ class CommentsSection extends GetView<HomeController> {
 
       if (!comment.areRepliesVisible.value) return const SizedBox.shrink();
 
-      return Padding(
-        padding: const EdgeInsets.only(left: 40.0, top: 8),
+      return Container(
+        margin: const EdgeInsets.only(left: 20, top: 8),
+        padding: const EdgeInsets.only(left: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: AppColors.GREY_TEXT_COLOR.withOpacity(0.2),
+              width: 2,
+            ),
+          ),
+        ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (comment.areRepliesLoading.value)
               const Padding(
                 padding: EdgeInsets.all(8.0),
                 child: SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  height: 24,
+                  width: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: AppColors.PRIMARY_COLOR,
+                  ),
                 ),
               ),
-            ...comment.replies.map((reply) => _buildReplyTile(reply)),
+            ...comment.replies.map(
+              (reply) => _buildReplyTile(context, meme, reply, comment),
+            ),
           ],
         ),
       );
     });
   }
 
-  Widget _buildReplyTile(ReplyModel reply) {
+  Widget _buildReplyTile(
+    BuildContext context,
+    MemeModel meme,
+    ReplyModel reply,
+    CommentModel parentComment,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -1228,7 +1523,7 @@ class CommentsSection extends GetView<HomeController> {
         children: [
           CircleAvatar(
             radius: 14,
-            backgroundColor: AppColors.PRIMARY_COLOR.withOpacity(0.2),
+            backgroundColor: AppColors.SECONDARY_COLOR.withOpacity(0.2),
             backgroundImage:
                 reply.userAvatarUrl != null && reply.userAvatarUrl!.isNotEmpty
                 ? CachedNetworkImageProvider(reply.userAvatarUrl!)
@@ -1245,32 +1540,331 @@ class CommentsSection extends GetView<HomeController> {
                 color: AppColors.BLACK_COLOR,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
                 children: [
-                  Text(
-                    '${reply.userName} · ${_formatTime(reply.createdAt)}',
-                    style: GoogleFonts.poppins(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.WHITE_COLOR,
-                      fontSize: 13,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RichText(
+                        text: TextSpan(
+                          style: GoogleFonts.poppins(
+                            color: AppColors.WHITE_COLOR,
+                            fontSize: 13,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: reply.userName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            TextSpan(
+                              text: '  ·  ${_formatTime(reply.createdAt)}',
+                              style: TextStyle(
+                                color: AppColors.GREY_TEXT_COLOR,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      RichText(
+                        text: TextSpan(
+                          style: GoogleFonts.poppins(
+                            color: AppColors.WHITE_COLOR.withOpacity(0.9),
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: '@${parentComment.userName} ',
+                              style: TextStyle(
+                                color: AppColors.PRIMARY_COLOR,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            TextSpan(text: reply.text),
+                          ],
+                        ),
+                      ),
+                      if (reply.totalReactionCount > 0)
+                        const SizedBox(
+                          height: 24,
+                        ), // Space for reaction summary
+                      _buildReplyActions(context, meme, reply, parentComment),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    reply.text,
-                    style: GoogleFonts.poppins(
-                      color: AppColors.WHITE_COLOR.withOpacity(0.9),
-                      fontSize: 13,
+                  if (reply.totalReactionCount > 0)
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: _buildReplyReactionSummary(reply),
                     ),
-                  ),
                 ],
               ),
             ),
           ),
         ],
       ),
-    ).animate().fadeIn(duration: 300.ms);
+    ).animate().fadeIn(duration: 300.ms).slideX(begin: 0.2);
+  }
+
+  Widget _buildReplyActions(
+    BuildContext context,
+    MemeModel meme,
+    ReplyModel reply,
+    CommentModel parentComment,
+  ) {
+    final currentUser = controller.loginCredential.getUserData();
+    if (currentUser == null) return const SizedBox.shrink();
+    final userReaction = reply.getUserReaction(currentUser.id ?? '');
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: Row(
+        children: [
+          Builder(
+            builder: (buttonContext) {
+              return InkWell(
+                onTap: () => _showReplyReactionOverlay(
+                  buttonContext,
+                  meme,
+                  parentComment,
+                  reply,
+                ),
+                child: Row(
+                  children: [
+                    if (userReaction != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4.0),
+                        child: Text(
+                          controller.reactionEmojis[userReaction] ?? '',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    Text(
+                      'React',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.bold,
+                        color: userReaction != null
+                            ? AppColors.PRIMARY_COLOR
+                            : AppColors.GREY_TEXT_COLOR,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          // Not implementing reply to a reply for simplicity.
+        ],
+      ),
+    );
+  }
+
+  void _showReplyReactionOverlay(
+    BuildContext context,
+    MemeModel meme,
+    CommentModel parentComment,
+    ReplyModel reply,
+  ) {
+    final currentUser = controller.loginCredential.getUserData();
+    if (currentUser == null) return;
+    final userReaction = reply.getUserReaction(currentUser.id ?? '');
+
+    final overlay = Overlay.of(context);
+    final renderBox = context.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    OverlayEntry? overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) => Positioned.fill(
+        child: GestureDetector(
+          onTap: () => overlayEntry?.remove(),
+          child: Container(
+            color: Colors.transparent,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: offset.dx,
+                  top: offset.dy - 60,
+                  child: Material(
+                    color: Colors.transparent,
+                    child:
+                        Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.BLACK_COLOR,
+                                borderRadius: BorderRadius.circular(40),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.PRIMARY_COLOR.withOpacity(
+                                      0.2,
+                                    ),
+                                    blurRadius: 12,
+                                    spreadRadius: 3,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () {
+                                      if (userReaction != null) {
+                                        controller.toggleReplyReaction(
+                                          meme.id!,
+                                          parentComment.id,
+                                          reply.id,
+                                          userReaction,
+                                        );
+                                      }
+                                      overlayEntry?.remove();
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: 200.ms,
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: userReaction == null
+                                            ? AppColors.PRIMARY_COLOR
+                                                  .withOpacity(0.2)
+                                            : Colors.transparent,
+                                      ),
+                                      child: const Icon(
+                                        Icons.not_interested,
+                                        color: AppColors.GREY_TEXT_COLOR,
+                                        size: 24,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  ...controller.reactionEmojis.entries.map((
+                                    entry,
+                                  ) {
+                                    final isSelected =
+                                        userReaction == entry.key;
+                                    return GestureDetector(
+                                      onTap: () {
+                                        controller.toggleReplyReaction(
+                                          meme.id!,
+                                          parentComment.id,
+                                          reply.id,
+                                          entry.key,
+                                        );
+                                        overlayEntry?.remove();
+                                      },
+                                      child:
+                                          AnimatedContainer(
+                                                duration: 200.ms,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 4,
+                                                    ),
+                                                padding: const EdgeInsets.all(
+                                                  6,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: isSelected
+                                                      ? AppColors.PRIMARY_COLOR
+                                                            .withOpacity(0.2)
+                                                      : Colors.transparent,
+                                                ),
+                                                child: Text(
+                                                  entry.value,
+                                                  style: const TextStyle(
+                                                    fontSize: 24,
+                                                  ),
+                                                ),
+                                              )
+                                              .animate(
+                                                target: isSelected ? 1 : 0,
+                                              )
+                                              .scale(
+                                                begin: const Offset(1, 1),
+                                                end: const Offset(1.2, 1.2),
+                                                curve: Curves.elasticOut,
+                                              ),
+                                    );
+                                  }).toList(),
+                                ],
+                              ),
+                            )
+                            .animate()
+                            .fadeIn(duration: 250.ms)
+                            .scale(
+                              begin: const Offset(0.7, 0.7),
+                              curve: Curves.easeOutBack,
+                            ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+  }
+
+  Widget _buildReplyReactionSummary(ReplyModel reply) {
+    if (reply.totalReactionCount == 0) return const SizedBox.shrink();
+
+    final sortedReactions = reply.reactions.entries.toList()
+      ..removeWhere((entry) => entry.value.isEmpty)
+      ..sort((a, b) => b.value.length.compareTo(a.value.length));
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.PRIMARY_COLOR.withOpacity(0.8),
+            AppColors.SECONDARY_COLOR.withOpacity(0.8),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (sortedReactions.isNotEmpty)
+            SizedBox(
+              height: 20,
+              child: Stack(
+                children: List.generate(
+                  sortedReactions.take(3).length,
+                  (index) => Padding(
+                    padding: EdgeInsets.only(left: (index * 12).toDouble()),
+                    child: Text(
+                      controller.reactionEmojis[sortedReactions[index].key] ??
+                          '',
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ).reversed.toList(),
+              ),
+            ),
+          const SizedBox(width: 6),
+          Text(
+            reply.totalReactionCount.toString(),
+            style: GoogleFonts.poppins(
+              color: AppColors.WHITE_COLOR,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _formatTime(DateTime time) {

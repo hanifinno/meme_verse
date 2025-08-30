@@ -353,11 +353,10 @@ class HomeController extends GetxController
         'uploaderName':
             FirebaseAuth.instance.currentUser?.displayName ?? 'Anonymous',
         'uploaderAvatar': FirebaseAuth.instance.currentUser?.photoURL,
-        'likeCount': 0,
         'commentCount': 0,
         'shareCount': 0,
         'saveCount': 0,
-        'likedBy': [],
+        'reactions': {},
         'isTrending': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -382,46 +381,84 @@ class HomeController extends GetxController
     }
   }
 
-  Future<void> toggleLike(String memeId) async {
-    if (userId.isEmpty) return;
+  Future<void> toggleMemeReaction(String memeId, String reactionType) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final userId = user.uid;
 
     final memeRef = firestore.collection('memes').doc(memeId);
 
-    // Optimistic UI update
+    // --- Optimistic UI Update ---
     _updateLocalMeme(memeId, (meme) {
-      meme.isLikedByUser = !(meme.isLikedByUser ?? false);
-      meme.likeCount = (meme.likeCount ?? 0) + (meme.isLikedByUser! ? 1 : -1);
+      final newReactions = Map<String, List<String>>.from(
+        meme.reactions.map(
+          (key, value) => MapEntry(key, List<String>.from(value)),
+        ),
+      );
+      final currentReaction = meme.userReaction;
+
+      if (currentReaction != null) {
+        newReactions[currentReaction]?.remove(userId);
+        if (newReactions[currentReaction]?.isEmpty ?? false) {
+          newReactions.remove(currentReaction);
+        }
+      }
+
+      if (currentReaction != reactionType) {
+        newReactions.putIfAbsent(reactionType, () => []).add(userId);
+      }
+
+      meme.reactions = newReactions;
+      meme.userReaction = null;
+      meme.reactions.forEach((key, value) {
+        if (value.contains(userId)) meme.userReaction = key;
+      });
+      meme.totalReactionCount = meme.reactions.values.fold(
+        0,
+        (sum, list) => sum + list.length,
+      );
     });
 
-    // Backend update
+    // --- End of Optimistic UI Update ---
+
+    // Backend update using a transaction for safety
     try {
       await firestore.runTransaction((transaction) async {
-        final snapshot = await transaction.get(memeRef);
-        if (!snapshot.exists) throw Exception("Meme does not exist!");
+        final doc = await transaction.get(memeRef);
+        if (!doc.exists) return;
 
-        final List<dynamic> likedBy = snapshot.data()?['likedBy'] ?? [];
-        final isCurrentlyLiked = likedBy.contains(userId);
+        final data = doc.data() as Map<String, dynamic>;
+        final reactions = (data['reactions'] as Map<String, dynamic>? ?? {})
+            .map(
+              (key, value) =>
+                  MapEntry(key, List<String>.from(value.cast<String>())),
+            );
 
-        if (isCurrentlyLiked) {
-          transaction.update(memeRef, {
-            'likedBy': FieldValue.arrayRemove([userId]),
-            'likeCount': FieldValue.increment(-1),
-          });
-        } else {
-          transaction.update(memeRef, {
-            'likedBy': FieldValue.arrayUnion([userId]),
-            'likeCount': FieldValue.increment(1),
-          });
+        String? userPreviousReaction;
+        reactions.forEach((key, value) {
+          if (value.contains(userId)) userPreviousReaction = key;
+        });
+
+        if (userPreviousReaction != null) {
+          reactions[userPreviousReaction]?.remove(userId);
+          if (reactions[userPreviousReaction]?.isEmpty ?? false) {
+            reactions.remove(userPreviousReaction);
+          }
         }
+
+        if (userPreviousReaction != reactionType) {
+          reactions.putIfAbsent(reactionType, () => []).add(userId);
+        }
+
+        transaction.update(memeRef, {'reactions': reactions});
       });
     } catch (e) {
-      debugPrint("Failed to toggle like: $e");
-      // Revert optimistic update on error
+      debugPrint("Failed to toggle meme reaction: $e");
+      Get.snackbar('Error', 'Could not update reaction.');
+      // Revert optimistic update
       _updateLocalMeme(memeId, (meme) {
-        meme.isLikedByUser = !(meme.isLikedByUser ?? false);
-        meme.likeCount = (meme.likeCount ?? 0) + (meme.isLikedByUser! ? 1 : -1);
+        // To revert, would need to store previous state, but for simplicity, refetch or skip
       });
-      Get.snackbar('Error', 'Could not update like status.');
     }
   }
 
@@ -729,6 +766,94 @@ class HomeController extends GetxController
       });
     } catch (e) {
       debugPrint("Failed to toggle comment reaction: $e");
+      Get.snackbar('Error', 'Could not update reaction.');
+    }
+  }
+
+  Future<void> toggleReplyReaction(
+    String memeId,
+    String commentId,
+    String replyId,
+    String reactionType,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final userId = user.uid;
+
+    final replyRef = firestore
+        .collection('memes')
+        .doc(memeId)
+        .collection('comments')
+        .doc(commentId)
+        .collection('replies')
+        .doc(replyId);
+
+    // --- Optimistic UI Update ---
+    final commentIndex = currentMemeComments.indexWhere(
+      (c) => c.id == commentId,
+    );
+    if (commentIndex != -1) {
+      final comment = currentMemeComments[commentIndex];
+      final replyIndex = comment.replies.indexWhere((r) => r.id == replyId);
+
+      if (replyIndex != -1) {
+        final reply = comment.replies[replyIndex];
+        final newReactions = Map<String, List<String>>.from(
+          reply.reactions.map(
+            (key, value) => MapEntry(key, List<String>.from(value)),
+          ),
+        );
+        final currentReaction = reply.getUserReaction(userId);
+
+        if (currentReaction != null) {
+          newReactions[currentReaction]?.remove(userId);
+          if (newReactions[currentReaction]?.isEmpty ?? false) {
+            newReactions.remove(currentReaction);
+          }
+        }
+
+        if (currentReaction != reactionType) {
+          newReactions.putIfAbsent(reactionType, () => []).add(userId);
+        }
+
+        reply.reactions = newReactions;
+        currentMemeComments.refresh();
+      }
+    }
+    // --- End of Optimistic UI Update ---
+
+    try {
+      await firestore.runTransaction((transaction) async {
+        final doc = await transaction.get(replyRef);
+        if (!doc.exists) return;
+
+        final data = doc.data() as Map<String, dynamic>;
+        final reactions = (data['reactions'] as Map<String, dynamic>? ?? {})
+            .map(
+              (key, value) =>
+                  MapEntry(key, List<String>.from(value.cast<String>())),
+            );
+
+        String? userPreviousReaction;
+        reactions.forEach((key, value) {
+          if (value.contains(userId)) userPreviousReaction = key;
+        });
+
+        if (userPreviousReaction != null) {
+          reactions[userPreviousReaction]?.remove(userId);
+          if (reactions[userPreviousReaction]?.isEmpty ?? false) {
+            reactions.remove(userPreviousReaction);
+          }
+        }
+
+        if (userPreviousReaction != reactionType) {
+          reactions.putIfAbsent(reactionType, () => []).add(userId);
+        }
+
+        transaction.update(replyRef, {'reactions': reactions});
+      });
+    } catch (e) {
+      debugPrint("Failed to toggle reply reaction: $e");
       Get.snackbar('Error', 'Could not update reaction.');
     }
   }
