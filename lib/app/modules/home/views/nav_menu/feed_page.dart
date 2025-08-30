@@ -539,14 +539,14 @@ class FeedPage extends GetView<HomeController> {
             },
           ),
           _buildInteractionButton(
-            Icon(Iconsax.message, size: 22),
+            Icon(Iconsax.message, color: AppColors.WHITE_COLOR, size: 22),
             meme.commentCount ?? 0,
             false,
             AppColors.WARNING_COLOR,
             () => _showCommentsBottomSheet(context, meme),
           ),
           _buildInteractionButton(
-            Icon(Iconsax.share, size: 22),
+            Icon(Iconsax.share, size: 22, color: AppColors.WHITE_COLOR),
             meme.shareCount ?? 0,
             false,
             AppColors.GREEN_COLOR,
@@ -555,7 +555,13 @@ class FeedPage extends GetView<HomeController> {
             },
           ),
           _buildInteractionButton(
-            Icon(Iconsax.bookmark, size: 22),
+            Icon(
+              Iconsax.bookmark,
+              size: 22,
+              color: meme.isSaved == true
+                  ? AppColors.PRIMARY_COLOR
+                  : AppColors.WHITE_COLOR,
+            ),
             meme.saveCount ?? 0,
             meme.isSaved ?? false,
             AppColors.PRIMARY_COLOR,
