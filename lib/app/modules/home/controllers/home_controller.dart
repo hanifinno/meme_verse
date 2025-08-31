@@ -785,6 +785,318 @@ class HomeController extends GetxController
     }
   }
 
+  Future<void> editComment(
+    String memeId,
+    String commentId,
+    String newText,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Get.snackbar('Error', 'You must be logged in to edit a comment.');
+      return;
+    }
+    final userId = user.uid;
+
+    final commentRef = firestore
+        .collection('memes')
+        .doc(memeId)
+        .collection('comments')
+        .doc(commentId);
+
+    // --- Optimistic UI Update ---
+    final commentIndex = currentMemeComments.indexWhere(
+      (c) => c.id == commentId,
+    );
+    String? oldText;
+    if (commentIndex != -1) {
+      final comment = currentMemeComments[commentIndex];
+      if (comment.userId != userId) {
+        Get.snackbar('Error', 'You can only edit your own comments.');
+        return;
+      }
+      oldText = comment.text; // Store old text for revert
+      comment.text = newText; // Update text locally
+      comment.createdAt = DateTime.now(); // Update timestamp
+      currentMemeComments[commentIndex] = comment; // Replace comment
+      currentMemeComments.refresh();
+    }
+
+    // Backend update
+    try {
+      await firestore.runTransaction((transaction) async {
+        final doc = await transaction.get(commentRef);
+        if (!doc.exists) {
+          throw Exception('Comment does not exist.');
+        }
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['userId'] != userId) {
+          throw Exception('Unauthorized: You can only edit your own comments.');
+        }
+        transaction.update(commentRef, {
+          'text': newText,
+          'createdAt': Timestamp.fromDate(DateTime.now()),
+        });
+      });
+    } catch (e) {
+      debugPrint("Failed to edit comment: $e");
+      Get.snackbar('Error', 'Could not edit comment: $e');
+      // Revert optimistic update on failure
+      if (commentIndex != -1 && oldText != null) {
+        final comment = currentMemeComments[commentIndex];
+        comment.text = oldText;
+        currentMemeComments[commentIndex] = comment;
+        currentMemeComments.refresh();
+      }
+    }
+  }
+
+  Future<void> deleteComment(String memeId, String commentId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Get.snackbar('Error', 'You must be logged in to delete a comment.');
+      return;
+    }
+    final userId = user.uid;
+
+    final commentRef = firestore
+        .collection('memes')
+        .doc(memeId)
+        .collection('comments')
+        .doc(commentId);
+    final memeRef = firestore.collection('memes').doc(memeId);
+
+    // --- Optimistic UI Update ---
+    final commentIndex = currentMemeComments.indexWhere(
+      (c) => c.id == commentId,
+    );
+    CommentModel? deletedComment;
+    if (commentIndex != -1) {
+      final comment = currentMemeComments[commentIndex];
+      if (comment.userId != userId) {
+        Get.snackbar('Error', 'You can only delete your own comments.');
+        return;
+      }
+      deletedComment = comment; // Store for revert
+      currentMemeComments.removeAt(commentIndex); // Remove locally
+      // Update meme's comment count
+      final memeIndex = feedList.indexWhere((m) => m.id == memeId);
+      if (memeIndex != -1) {
+        feedList[memeIndex].commentCount =
+            (feedList[memeIndex].commentCount ?? 1) - 1;
+        feedList.refresh();
+      }
+      currentMemeComments.refresh();
+    }
+
+    // Backend update
+    try {
+      await firestore.runTransaction((transaction) async {
+        final doc = await transaction.get(commentRef);
+        if (!doc.exists) {
+          throw Exception('Comment does not exist.');
+        }
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['userId'] != userId) {
+          throw Exception(
+            'Unauthorized: You can only delete your own comments.',
+          );
+        }
+
+        // Delete replies subcollection
+        final repliesQuery = await commentRef.collection('replies').get();
+        for (var replyDoc in repliesQuery.docs) {
+          transaction.delete(replyDoc.reference);
+        }
+
+        // Delete comment
+        transaction.delete(commentRef);
+
+        // Update meme's comment count
+        transaction.update(memeRef, {'commentCount': FieldValue.increment(-1)});
+      });
+    } catch (e) {
+      debugPrint("Failed to delete comment: $e");
+      Get.snackbar('Error', 'Could not delete comment: $e');
+      // Revert optimistic update on failure
+      if (deletedComment != null && commentIndex != -1) {
+        currentMemeComments.insert(commentIndex, deletedComment);
+        final memeIndex = feedList.indexWhere((m) => m.id == memeId);
+        if (memeIndex != -1) {
+          feedList[memeIndex].commentCount =
+              (feedList[memeIndex].commentCount ?? 0) + 1;
+          feedList.refresh();
+        }
+        currentMemeComments.refresh();
+      }
+    }
+  }
+
+  Future<void> editReply(
+    String memeId,
+    String commentId,
+    String replyId,
+    String newText,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Get.snackbar('Error', 'You must be logged in to edit a reply.');
+      return;
+    }
+    final userId = user.uid;
+
+    final replyRef = firestore
+        .collection('memes')
+        .doc(memeId)
+        .collection('comments')
+        .doc(commentId)
+        .collection('replies')
+        .doc(replyId);
+
+    // --- Optimistic UI Update ---
+    final commentIndex = currentMemeComments.indexWhere(
+      (c) => c.id == commentId,
+    );
+    String? oldText;
+    if (commentIndex != -1) {
+      final comment = currentMemeComments[commentIndex];
+      final replyIndex = comment.replies.indexWhere((r) => r.id == replyId);
+      if (replyIndex != -1) {
+        final reply = comment.replies[replyIndex];
+        if (reply.userId != userId) {
+          Get.snackbar('Error', 'You can only edit your own replies.');
+          return;
+        }
+        oldText = reply.text; // Store old text for revert
+        reply.text = newText; // Update text locally
+        reply.createdAt = DateTime.now(); // Update timestamp
+        comment.replies[replyIndex] = reply; // Replace reply
+        comment.replies.refresh();
+        currentMemeComments.refresh();
+      }
+    }
+
+    // Backend update
+    try {
+      await firestore.runTransaction((transaction) async {
+        final doc = await transaction.get(replyRef);
+        if (!doc.exists) {
+          throw Exception('Reply does not exist.');
+        }
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['userId'] != userId) {
+          throw Exception('Unauthorized: You can only edit your own replies.');
+        }
+        transaction.update(replyRef, {
+          'text': newText,
+          'createdAt': Timestamp.fromDate(DateTime.now()),
+        });
+      });
+    } catch (e) {
+      debugPrint("Failed to edit reply: $e");
+      Get.snackbar('Error', 'Could not edit reply: $e');
+      // Revert optimistic update on failure
+      if (commentIndex != -1 && oldText != null) {
+        final comment = currentMemeComments[commentIndex];
+        final replyIndex = comment.replies.indexWhere((r) => r.id == replyId);
+        if (replyIndex != -1) {
+          final reply = comment.replies[replyIndex];
+          reply.text = oldText;
+          comment.replies[replyIndex] = reply;
+          comment.replies.refresh();
+          currentMemeComments.refresh();
+        }
+      }
+    }
+  }
+
+  Future<void> deleteReply(
+    String memeId,
+    String commentId,
+    String replyId,
+  ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      Get.snackbar('Error', 'You must be logged in to delete a reply.');
+      return;
+    }
+    final userId = user.uid;
+
+    final replyRef = firestore
+        .collection('memes')
+        .doc(memeId)
+        .collection('comments')
+        .doc(commentId)
+        .collection('replies')
+        .doc(replyId);
+    final commentRef = firestore
+        .collection('memes')
+        .doc(memeId)
+        .collection('comments')
+        .doc(commentId);
+
+    // --- Optimistic UI Update ---
+    final commentIndex = currentMemeComments.indexWhere(
+      (c) => c.id == commentId,
+    );
+    ReplyModel? deletedReply;
+    if (commentIndex != -1) {
+      final comment = currentMemeComments[commentIndex];
+      final replyIndex = comment.replies.indexWhere((r) => r.id == replyId);
+      if (replyIndex != -1) {
+        final reply = comment.replies[replyIndex];
+        if (reply.userId != userId) {
+          Get.snackbar('Error', 'You can only delete your own replies.');
+          return;
+        }
+        deletedReply = reply; // Store for revert
+        comment.replies.removeAt(replyIndex); // Remove locally
+        comment.replyCount = (comment.replyCount > 0)
+            ? comment.replyCount - 1
+            : 0;
+        comment.replies.refresh();
+        currentMemeComments.refresh();
+      }
+    }
+
+    // Backend update
+    try {
+      await firestore.runTransaction((transaction) async {
+        final doc = await transaction.get(replyRef);
+        if (!doc.exists) {
+          throw Exception('Reply does not exist.');
+        }
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['userId'] != userId) {
+          throw Exception(
+            'Unauthorized: You can only delete your own replies.',
+          );
+        }
+
+        // Delete reply
+        transaction.delete(replyRef);
+
+        // Update comment's reply count
+        transaction.update(commentRef, {
+          'replyCount': FieldValue.increment(-1),
+        });
+      });
+    } catch (e) {
+      debugPrint("Failed to delete reply: $e");
+      Get.snackbar('Error', 'Could not delete reply: $e');
+      // Revert optimistic update on failure
+      if (deletedReply != null && commentIndex != -1) {
+        final comment = currentMemeComments[commentIndex];
+        final replyIndex = comment.replies.indexWhere((r) => r.id == replyId);
+        if (replyIndex == -1) {
+          comment.replies.add(deletedReply);
+          comment.replyCount = comment.replyCount + 1;
+          comment.replies.refresh();
+          currentMemeComments.refresh();
+        }
+      }
+    }
+  }
+
   Future<void> toggleReplyReaction(
     String memeId,
     String commentId,

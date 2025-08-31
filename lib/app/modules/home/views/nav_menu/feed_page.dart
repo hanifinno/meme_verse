@@ -1423,6 +1423,32 @@ class CommentsSection extends GetView<HomeController> {
               ),
             ),
           ),
+          if (comment.userId == currentUser.id) ...[
+            const SizedBox(width: 24),
+            InkWell(
+              onTap: () => _showEditCommentDialog(context, comment),
+              child: Text(
+                'Edit',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.PRIMARY_COLOR,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 24),
+            InkWell(
+              onTap: () => _confirmDeleteComment(context, comment),
+              child: Text(
+                'Delete',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.WARNING_COLOR,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1711,7 +1737,255 @@ class CommentsSection extends GetView<HomeController> {
               );
             },
           ),
-          // Not implementing reply to a reply for simplicity.
+          if (reply.userId == currentUser.id) ...[
+            const SizedBox(width: 24),
+            InkWell(
+              onTap: () =>
+                  _showEditReplyDialog(context, meme, parentComment, reply),
+              child: Text(
+                'Edit',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.PRIMARY_COLOR,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 24),
+            InkWell(
+              onTap: () =>
+                  _confirmDeleteReply(context, meme, parentComment, reply),
+              child: Text(
+                'Delete',
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.WARNING_COLOR,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showEditCommentDialog(BuildContext context, CommentModel comment) {
+    final textController = TextEditingController(text: comment.text);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.GRAY_WHITE_COLOR,
+        title: Text(
+          'Edit Comment',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: AppColors.WHITE_COLOR,
+          ),
+        ),
+        content: TextField(
+          controller: textController,
+          minLines: 1,
+          maxLines: 4,
+          style: GoogleFonts.poppins(color: AppColors.WHITE_COLOR),
+          decoration: InputDecoration(
+            hintText: 'Edit your comment...',
+            hintStyle: GoogleFonts.poppins(color: AppColors.GREY_TEXT_COLOR),
+            filled: true,
+            fillColor: AppColors.BLACK_COLOR,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(color: AppColors.GREY_TEXT_COLOR),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              if (textController.text.trim().isNotEmpty) {
+                controller.editComment(
+                  comment.memeId,
+                  comment.id,
+                  textController.text.trim(),
+                );
+                Get.back();
+              } else {
+                Get.snackbar('Error', 'Comment cannot be empty.');
+              }
+            },
+            child: Text(
+              'Save',
+              style: GoogleFonts.poppins(
+                color: AppColors.PRIMARY_COLOR,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteComment(BuildContext context, CommentModel comment) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.GRAY_WHITE_COLOR,
+        title: Text(
+          'Delete Comment',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: AppColors.WHITE_COLOR,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete this comment?',
+          style: GoogleFonts.poppins(color: AppColors.GREY_TEXT_COLOR),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(color: AppColors.GREY_TEXT_COLOR),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              controller.deleteComment(comment.memeId, comment.id);
+              Get.back();
+            },
+            child: Text(
+              'Delete',
+              style: GoogleFonts.poppins(
+                color: AppColors.WARNING_COLOR,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditReplyDialog(
+    BuildContext context,
+    MemeModel meme,
+    CommentModel parentComment,
+    ReplyModel reply,
+  ) {
+    final textController = TextEditingController(text: reply.text);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.GRAY_WHITE_COLOR,
+        title: Text(
+          'Edit Reply',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: AppColors.WHITE_COLOR,
+          ),
+        ),
+        content: TextField(
+          controller: textController,
+          minLines: 1,
+          maxLines: 4,
+          style: GoogleFonts.poppins(color: AppColors.WHITE_COLOR),
+          decoration: InputDecoration(
+            hintText: 'Edit your reply...',
+            hintStyle: GoogleFonts.poppins(color: AppColors.GREY_TEXT_COLOR),
+            filled: true,
+            fillColor: AppColors.BLACK_COLOR,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(color: AppColors.GREY_TEXT_COLOR),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              if (textController.text.trim().isNotEmpty) {
+                controller.editReply(
+                  meme.id!,
+                  parentComment.id,
+                  reply.id,
+                  textController.text.trim(),
+                );
+                Get.back();
+              } else {
+                Get.snackbar('Error', 'Reply cannot be empty.');
+              }
+            },
+            child: Text(
+              'Save',
+              style: GoogleFonts.poppins(
+                color: AppColors.PRIMARY_COLOR,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteReply(
+    BuildContext context,
+    MemeModel meme,
+    CommentModel parentComment,
+    ReplyModel reply,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.GRAY_WHITE_COLOR,
+        title: Text(
+          'Delete Reply',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            color: AppColors.WHITE_COLOR,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to delete this reply?',
+          style: GoogleFonts.poppins(color: AppColors.GREY_TEXT_COLOR),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(color: AppColors.GREY_TEXT_COLOR),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              controller.deleteReply(meme.id!, parentComment.id, reply.id);
+              Get.back();
+            },
+            child: Text(
+              'Delete',
+              style: GoogleFonts.poppins(
+                color: AppColors.WARNING_COLOR,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ],
       ),
     );
