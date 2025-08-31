@@ -7,12 +7,14 @@ import 'package:meme_verse/app/data/login_credentials.dart';
 import '../../../routes/app_pages.dart';
 
 class MemeDetailsController extends GetxController {
-   String memeId=''; 
-   MemeModel memeModel= MemeModel(); 
+  // Reactive String
+  RxString memeId = ''.obs;
+
+  // Reactive Model
+  Rx<MemeModel> memeModel = MemeModel().obs;
   @override
   void onInit() {
-   memeModel= Get.arguments;
+    memeModel.value = Get.arguments;
     super.onInit();
   }
-
 }

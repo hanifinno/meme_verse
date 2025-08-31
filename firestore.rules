@@ -20,8 +20,17 @@ service cloud.firestore {
       allow create: if request.auth != null && request.resource.data.uploaderId == request.auth.uid;
 
       // Authenticated users can update specific fields (reactions, counts)
+      // We will make this more granular to allow owners to update sale status.
       allow update: if request.auth != null &&
-                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions', 'saveCount', 'shareCount', 'commentCount']);
+                       // Immutable fields must not change
+                       request.resource.data.uploaderId == resource.data.uploaderId &&
+                       request.resource.data.createdAt == resource.data.createdAt &&
+                       request.resource.data.id == resource.data.id &&
+                       // ownerId can only be changed by a backend process, not clients
+                       request.resource.data.ownerId == resource.data.ownerId &&
+                       // Only owner can change sale status and price
+                       (request.resource.data.isForSale == resource.data.isForSale || (request.auth.uid == resource.data.ownerId || request.auth.uid == resource.data.uploaderId)) &&
+                       (request.resource.data.price == resource.data.price || (request.auth.uid == resource.data.ownerId || request.auth.uid == resource.data.uploaderId));
 
       // Rules for the 'comments' subcollection
       match /comments/{commentId} {
