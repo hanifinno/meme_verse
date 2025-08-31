@@ -138,7 +138,9 @@ class FeedPage extends GetView<HomeController> {
       onRefresh: controller.refreshTrending,
       color: AppColors.PRIMARY_COLOR,
       backgroundColor: AppColors.BLACK_COLOR,
-      child: _buildMemeList(controller.trendingList, true),
+      child: CustomScrollView(
+        slivers: [_buildMemeList(controller.trendingList, true)],
+      ),
     );
   }
 
@@ -147,7 +149,9 @@ class FeedPage extends GetView<HomeController> {
       onRefresh: controller.refreshFeed,
       color: AppColors.PRIMARY_COLOR,
       backgroundColor: AppColors.BLACK_COLOR,
-      child: _buildMemeList(controller.newList, false),
+      child: CustomScrollView(
+        slivers: [_buildMemeList(controller.newList, false)],
+      ),
     );
   }
 
