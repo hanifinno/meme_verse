@@ -38,6 +38,7 @@ class HomeController extends GetxController
     'wow': '😮',
     'sad': '😢',
     'angry': '😠',
+    'dislike': '👎🏿',
   };
   // For comments section
   final RxList<CommentModel> currentMemeComments = <CommentModel>[].obs;
@@ -62,7 +63,7 @@ class HomeController extends GetxController
 
     await refreshFeed();
     await refreshTrending();
-    // await fetchRecommendations();
+    await fetchRecommendations();
   }
 
   @override
